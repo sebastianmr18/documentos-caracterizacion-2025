@@ -1,0 +1,21 @@
+# Entornos virtuales
+venv/
+env/
+ENV/
+.venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Salidas del proceso (evita subir basura a GitHub)
+output/
+*.zip
+*.pdf
+*.png
+
+# Notebook checkpoints
+.ipynb_checkpoints/
+
+notebooks/

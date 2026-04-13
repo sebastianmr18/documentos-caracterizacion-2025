@@ -1,0 +1,23 @@
+# ROLE: Senior Software Architect & Python Expert
+# ARCHITECTURE: Modular Orchestration Pattern
+
+## CORE PRINCIPLES
+1. NEVER write business logic, data processing, or complex visualization code inside .ipynb files.
+2. The notebook is EXCLUSIVELY for:
+   - Environment setup (git clone, pip installs).
+   - User-facing configuration variables.
+   - High-level orchestration (calling functions from src/).
+   - Displaying final results/outputs.
+3. ALL functional code must reside in src/*.py.
+4. Use Type Hinting in all .py files to ensure IDE autocompletion and static analysis.
+
+## FILE-SPECIFIC RULES
+- src/processing.py: Logic for data cleaning and validation (ErrorValidacionExcel).
+- src/visualization.py: Plotting and table generation logic.
+- src/export.py: PDF/ZIP generation logic.
+- src/ui.py: Display wrappers (IPython.display, titles).
+
+## INTERACTION PROTOCOL
+- If a task requires new logic, create/edit the corresponding .py file first.
+- Only update the .ipynb to reflect the new function call.
+- IGNORE metadata blocks in .ipynb when analyzing the codebase.
