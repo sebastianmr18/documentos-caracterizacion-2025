@@ -113,6 +113,7 @@ COLUMNAS_OBLIGATORIAS_RAW = [
 ]
 
 COLUMNAS_EXACTAS_CLEANED = [
+	'Año de análisis',
 	'Fecha de nacimiento',
 	'Edad',
 	'Estrato socioeconómico',
@@ -566,6 +567,8 @@ def construir_dataframe_cleaned(
 			df_cleaned['Semestre académico'],
 			errors='coerce',
 		)
+
+	df_cleaned['Año de análisis'] = anio_analisis
 
 	df_cleaned = df_cleaned[COLUMNAS_EXACTAS_CLEANED].copy()
 
