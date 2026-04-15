@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import difflib
 import re
 import unicodedata
 from collections.abc import Callable, Sequence
@@ -112,7 +113,7 @@ COLUMNAS_OBLIGATORIAS_RAW = [
 	'¿Cómo te enteraste de los servicios de Campus Diverso?',
 ]
 
-COLUMNAS_EXACTAS_CLEANED = [
+COLUMNAS_FINAL_CLEANED = [
 	'Año de análisis',
 	'Fecha de nacimiento',
 	'Edad',
@@ -149,6 +150,8 @@ COLUMNAS_EXACTAS_CLEANED = [
 	'¿Tienes alguna creencia religiosa? ¿Cuál es?',
 	'Como te enteraste de Campus Diverso',
 ]
+
+COLUMNAS_MINIMAS_CLEANED = COLUMNAS_FINAL_CLEANED[1:]
 
 MAPEO_COLUMNAS_CLEANED = {
 	'Fecha de nacimiento': 'Fecha de nacimiento',
@@ -275,7 +278,7 @@ def mostrar_debug_validacion_tipo_base(df: pd.DataFrame, title_callback: TitleCa
 
 	for esquema, columnas_esperadas in [
 		('raw', COLUMNAS_EXACTAS_RAW),
-		('cleaned', COLUMNAS_EXACTAS_CLEANED),
+		('cleaned (mínimas)', COLUMNAS_MINIMAS_CLEANED),
 	]:
 		resumen = resumir_diferencias_con_esquema(df, columnas_esperadas, esquema)
 		print(f"Comparación contra esquema {esquema}:")
@@ -302,23 +305,25 @@ def mostrar_debug_validacion_tipo_base(df: pd.DataFrame, title_callback: TitleCa
 
 
 def detectar_tipo_base(df: pd.DataFrame) -> str:
-	columnas_actuales_normalizadas = normalizar_lista_columnas(obtener_columnas_df_raw(df))
+	columnas_actuales_normalizadas = set(normalizar_lista_columnas(obtener_columnas_df_raw(df)))
 	columnas_raw_normalizadas = normalizar_lista_columnas(COLUMNAS_EXACTAS_RAW)
-	columnas_cleaned_normalizadas = normalizar_lista_columnas(COLUMNAS_EXACTAS_CLEANED)
+	columnas_cleaned_minimas_normalizadas = set(normalizar_lista_columnas(COLUMNAS_MINIMAS_CLEANED))
 
-	if columnas_actuales_normalizadas == columnas_raw_normalizadas:
+	if normalizar_lista_columnas(obtener_columnas_df_raw(df)) == columnas_raw_normalizadas:
 		return 'raw'
-	if columnas_actuales_normalizadas == columnas_cleaned_normalizadas:
+	if columnas_cleaned_minimas_normalizadas.issubset(columnas_actuales_normalizadas):
 		return 'cleaned'
 	return 'desconocido'
 
 
-def homologar_columnas_df_raw(
+def homologar_columnas(
 	df: pd.DataFrame,
-	columnas_esperadas: Sequence[str] = COLUMNAS_EXACTAS_RAW,
+	columnas_esperadas: Sequence[str],
+	umbral_fuzzy: float = 0.60,
 	title_callback: TitleCallback | None = None,
 ) -> tuple[pd.DataFrame, list[tuple[str, str]], list[str]]:
 	columnas_actuales = obtener_columnas_df_raw(df)
+	
 	columnas_esperadas_normalizadas = {
 		normalizar_texto(columna): columna for columna in columnas_esperadas
 	}
@@ -329,8 +334,23 @@ def homologar_columnas_df_raw(
 	for columna_actual in columnas_actuales:
 		columna_normalizada = normalizar_texto(columna_actual)
 		columna_canonica = columnas_esperadas_normalizadas.get(columna_normalizada)
+		
+		# Regularización Fuzzy si no existe coincidencia exacta
+		if not columna_canonica:
+			coincidencias = difflib.get_close_matches(
+				columna_normalizada, 
+				list(columnas_esperadas_normalizadas.keys()), 
+				n=1, 
+				cutoff=umbral_fuzzy
+			)
+			if coincidencias:
+				columna_canonica = columnas_esperadas_normalizadas[coincidencias[0]]
+				
 		if columna_canonica:
-			renombres[columna_actual] = columna_canonica
+			if columna_canonica not in renombres.values(): # Evitar mapear dos columnas al mismo target
+				renombres[columna_actual] = columna_canonica
+			else:
+				columnas_sin_equivalencia.append(columna_actual)
 		else:
 			columnas_sin_equivalencia.append(columna_actual)
 
@@ -393,21 +413,22 @@ def validar_columnas_exactas_df_raw(df: pd.DataFrame, columnas_esperadas: Sequen
 	lanzar_error_validacion(mensaje)
 
 
-def validar_columnas_exactas_cleaned(df: pd.DataFrame, columnas_esperadas: Sequence[str] = COLUMNAS_EXACTAS_CLEANED) -> None:
+def validar_esquema_cleaned_minimo(df: pd.DataFrame, columnas_esperadas: Sequence[str] = COLUMNAS_MINIMAS_CLEANED) -> None:
 	columnas_actuales = obtener_columnas_df_raw(df)
+	faltantes = [col for col in columnas_esperadas if col not in columnas_actuales]
 
-	if columnas_actuales == list(columnas_esperadas):
-		print('La estructura exacta de columnas de la base cleaned coincide con lo esperado.')
+	if not faltantes:
+		print('La estructura base de columnas de la versión cleaned coincide con lo esperado (se incluyen todas las requeridas).')
+		adicionales = [col for col in columnas_actuales if col not in columnas_esperadas and col != "Año de análisis"]
+		if adicionales:
+			print('\nNota: Se detectaron columnas accesorias (las cuales serán omitidas de la salida estandarizada):')
+			for col in adicionales:
+				print(f"  - {col}")
 		return
 
-	faltantes = [col for col in columnas_esperadas if col not in columnas_actuales]
-	adicionales = [col for col in columnas_actuales if col not in columnas_esperadas]
-
-	mensaje = 'La estructura de la base cleaned no coincide con la versión esperada.'
-	if faltantes:
-		mensaje += f"\n- Columnas faltantes: {', '.join([repr(col) for col in faltantes])}"
-	if adicionales:
-		mensaje += f"\n- Columnas adicionales: {', '.join([repr(col) for col in adicionales])}"
+	mensaje = f"La estructura de la base de datos es inválida. Faltan {len(faltantes)} columnas requeridas del esquema CLEANED:"
+	for col in faltantes:
+		mensaje += f"\n- '{col}'"
 
 	lanzar_error_validacion(mensaje)
 
@@ -513,8 +534,8 @@ def validar_esquema_raw(df_raw: pd.DataFrame, title_callback: TitleCallback | No
 
 def validar_esquema_cleaned(df_cleaned: pd.DataFrame, title_callback: TitleCallback | None = None) -> None:
 	_emit_title(title_callback, 'Validación del esquema cleaned')
-	validar_columnas_exactas_cleaned(df_cleaned, COLUMNAS_EXACTAS_CLEANED)
-	print('La estructura exacta del archivo cleaned es válida.')
+	validar_esquema_cleaned_minimo(df_cleaned, COLUMNAS_MINIMAS_CLEANED)
+	print('La estructura del archivo cleaned es válida (contiene las columnas mínimas).')
 
 
 def construir_dataframe_cleaned(
@@ -525,6 +546,15 @@ def construir_dataframe_cleaned(
 	title_callback: TitleCallback | None = None,
 ) -> pd.DataFrame:
 	_emit_title(title_callback, 'Limpieza y transformación')
+
+	# Extraer o determinar 'Año de análisis'
+	# Se da prioridad a la columna "Marca temporal" (si existe) convirtiendo a fecha y usando el primer año válido encontrado.
+	año_calculado = anio_analisis
+	if 'Marca temporal' in df_entrada.columns:
+		m_temporal = pd.to_datetime(df_entrada['Marca temporal'], errors='coerce', dayfirst=True)
+		años_validos = m_temporal.dt.year.dropna()
+		if not años_validos.empty:
+			año_calculado = int(años_validos.mode().iloc[0]) # Usar el año más frecuente como el calculado para todo el archivo
 
 	if tipo_base == 'cleaned':
 		df_cleaned = df_entrada.copy()
@@ -549,18 +579,20 @@ def construir_dataframe_cleaned(
 		)
 		df_cleaned['Edad'] = calcular_edad_desde_fecha_nacimiento(
 			df_cleaned['Fecha de nacimiento'],
-			anio_analisis,
+			año_calculado,
 		)
 
 	columnas_categoricas = [
 		columna for columna in df_cleaned.columns
-		if columna not in ['Fecha de nacimiento', 'Edad']
+		if columna not in ['Fecha de nacimiento', 'Edad', 'Marca temporal', 'Año de análisis']
 	]
 
 	for columna in columnas_categoricas:
-		df_cleaned[columna] = df_cleaned[columna].apply(
-			lambda valor: limpiar_texto_categorico(valor, valor_relleno_categorico)
-		)
+		# Solamente aplica limpieza de texto si la columna de hecho pertenecerá al output
+		if columna in COLUMNAS_FINAL_CLEANED:
+			df_cleaned[columna] = df_cleaned[columna].apply(
+				lambda valor: limpiar_texto_categorico(valor, valor_relleno_categorico)
+			)
 
 	if 'Semestre académico' in df_cleaned.columns:
 		df_cleaned['Semestre académico'] = pd.to_numeric(
@@ -568,9 +600,10 @@ def construir_dataframe_cleaned(
 			errors='coerce',
 		)
 
-	df_cleaned['Año de análisis'] = anio_analisis
+	if 'Año de análisis' not in df_cleaned.columns:
+		df_cleaned['Año de análisis'] = año_calculado
 
-	df_cleaned = df_cleaned[COLUMNAS_EXACTAS_CLEANED].copy()
+	df_cleaned = df_cleaned[COLUMNAS_FINAL_CLEANED].copy()
 
 	print('Transformación finalizada.')
 	mostrar_resumen_dataframe(df_cleaned, nombre='Base cleaned')
