@@ -719,11 +719,13 @@ def mostrar_resumen_dataframe(df: pd.DataFrame, nombre: str = 'DataFrame') -> No
 
 
 def validar_esquema_raw(df_raw: pd.DataFrame, title_callback: TitleCallback | None = None) -> None:
+	"""Valida que el DataFrame RAW contenga todas las columnas obligatorias.
+	No exige orden exacto ni columnas adicionales específicas (como Unnamed:60, Convención).
+	"""
 	_emit_title(title_callback, 'Validación del esquema raw')
-	validar_columnas_exactas_df_raw(df_raw, COLUMNAS_EXACTAS_RAW)
 	validar_columnas_obligatorias(df_raw, COLUMNAS_OBLIGATORIAS_RAW)
 	advertir_columnas_adicionales(df_raw, COLUMNAS_OBLIGATORIAS_RAW)
-	print('La estructura mínima y exacta del archivo raw es válida.')
+	print('La estructura mínima del archivo raw es válida (todas las columnas obligatorias presentes).')
 
 
 def validar_esquema_cleaned(df_cleaned: pd.DataFrame, title_callback: TitleCallback | None = None) -> None:
