@@ -4,4 +4,5 @@ numpy
 openpyxl
 pandas
 pillow
+seaborn
 xlrd

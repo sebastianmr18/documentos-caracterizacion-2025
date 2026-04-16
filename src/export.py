@@ -65,14 +65,4 @@ def exportar_dataframe_cleaned_a_excel(
 	return ruta_destino
 
 
-def generar_salidas_finales(
-	rutas_png: list[str | Path],
-	ruta_pdf: str | Path,
-	ruta_zip: str | Path,
-	carpeta_fuente: str | Path,
-) -> tuple[Path, Path]:
-	ruta_pdf_final = exportar_figuras_a_pdf(rutas_png, ruta_pdf)
-	carpeta = Path(carpeta_fuente)
-	nombre_zip = Path(ruta_zip).stem
-	ruta_zip_final = crear_zip_resultados(carpeta, nombre_zip=nombre_zip)
-	return ruta_pdf_final, ruta_zip_final
+

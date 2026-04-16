@@ -70,10 +70,7 @@ COLUMNAS_EXACTAS_RAW = [
 	'Si respondiste "Si" a la pregunta anterior, ¿Cuál es tu creencia?',
 	'Para el encuentro inicial con Campus Diverso ¿te gustaría que tuviera lugar con un(a) profesional de un área específica? Esta opción está sujeta a la disponibilidad de les profesionales.',
 	'¿Cómo te enteraste de los servicios de Campus Diverso?',
-	'Déjanos, por favor, tus comentarios, sugerencias y observaciones. Para Campus Diverso es muy importante conocer si tienes inquietudes o aportes adicionales.',
-	'Unnamed: 60',
-	'Unnamed: 61',
-	'Convención',
+	'Déjanos, por favor, tus comentarios, sugerencias y observaciones. Para Campus Diverso es muy importante conocer si tienes inquietudes o aportes adicionales.'
 ]
 
 COLUMNAS_OBLIGATORIAS_RAW = [
@@ -201,7 +198,6 @@ ALIAS_COLUMNAS_CLEANED: dict[str, list[str]] = {
 	],
 	'Redes de apoyo (Identifica ¿con quiénes/qué apoyos cuentas?)': [
 		'Redes de apoyo (Identifica con quiénes o con qué apoyos cuentas)',    # 2023 (usa "o" en lugar de "/")
-		'Redes de apoyo (Identifica con quiénes o con qué apoyos cuentas)',    # RAW 2025
 	],
 	'Como te enteraste de Campus Diverso': [
 		'¿Cómo te enteraste de los servicios de Campus Diverso?',   # 2023 (tiene "servicios" y signos ¿?)
@@ -258,41 +254,16 @@ ALIAS_COLUMNAS_CLEANED: dict[str, list[str]] = {
 	],
 }
 
-MAPEO_COLUMNAS_CLEANED = {
-	'Fecha de nacimiento': 'Fecha de nacimiento',
-	'Estrato socioeconómico': 'Estrato socioeconómico',
-	'Ciudad, municipio o corregimiento de nacimiento': 'Ciudad, municipio o corregimiento de nacimiento',
-	'Departamento de nacimiento': 'Departamento de nacimiento',
-	'País de nacimiento': 'País de nacimiento',
-	'Ciudad, municipio o corregimiento de residencia': 'Ciudad, municipio o corregimiento de residencia',
-	'Zona de residencia': 'Zona de residencia',
-	'Barrio de residencia': 'Barrio de residencia',
-	'Estado civil': 'Estado civil',
-	'Auto-reconocimiento étnico (Hace referencia al sentido de pertenencia que expresa una persona frente a un colectivo, de acuerdo con su identidad y formas de interactuar en y con el mundo) ': 'Identidad étnica',
-	'¿A qué grupo poblacional perteneces?': 'Grupo poblacional',
-	'¿Cuál es tu identidad de géneros? ( es decir, ¿Cómo te vives, sientes, percibes, etc.?)': 'Identidad de género',
-	'Expresión de género (¿Cuál es tu apariencia?/¿cómo te muestras al mundo?)': 'Expresión de género',
-	'¿Cuál es tu orientación sexual?  es decir,  ¿Quién/es te gusta(n) o  atrae(n)?': 'Orientación sexual',
-	'¿Has realizado cambio de nombre y/o del componente sexo en tu documento de identidad?': 'Cambio de nombre/sexo en D.I',
-	'Si la respuesta a la pregunta anterior fue "NO" o sólo cambiaste uno de los dos componentes, ¿Qué te impidió realizar el cambio?': 'Impedimento cambio D.I',
-	'Por favor indícanos si te gustaría recibir orientación para realizar el cambio de nombre y/o sexo en tu documento de identidad.': 'Asesoría cambio D.I',
-	'¿Perteneces a la Universidad del Valle?': 'Pertenencia a la U',
-	'Estamento': 'Estamento',
-	'Sede de la universidad a la que pertenece': 'Sede de la Universidad del Valle',
-	'Nombre del programa académico': 'Nombre del programa académico',
-	'Semestre académico': 'Semestre académico',
-	'¿Cuál es tu ocupación actual?': '¿Cuál es tu ocupación actual?',
-	'Si eres empleado/a/e o independiente ¿A qué te dedicas específicamente?': 'Si eres empleado/a/e o independiente ¿A qué te dedicas específicamente?',
-	'¿En los últimos 3 meses has recibido alguno de los siguientes tipos de acompañamiento/orientación de acuerdo con tu situación, experiencia o proceso personal en otro espacio, colectivo, organización privada o servicio de salud?': '¿En los últimos 3 meses has recibido alguno de los siguientes tipos de acompañamiento/orientación de acuerdo con tu situación, experiencia o proceso personal en otro espacio, colectivo, organización privada o servicio de salud?',
-	'¿En qué tipo de entidad recibiste el acompañamiento?': 'Entidad acompañamiento',
-	'¿Qué profesional le brindó la atención?': 'Profesional acompañante',
-	'¿Cuál(es) es/son tu(s) fuente(s) de ingresos?': '¿De donde provienen tus ingresos o recursos?',
-	'¿Con quién(es) vives?': '¿Con quién(es) vives?',
-	'Redes de apoyo (Identifica con quiénes o con qué apoyos cuentas)': 'Redes de apoyo (Identifica ¿con quiénes/qué apoyos cuentas?)',
-	'Factores de riesgo (identifica aquello que puede estar poniéndote en riesgo)': 'Factores de riesgo (identifica aquello que puede estar poniéndote en riesgo)',
-	'¿Tienes alguna creencia religiosa? ¿Cuál es?': '¿Tienes alguna creencia religiosa? ¿Cuál es?',
-	'¿Cómo te enteraste de los servicios de Campus Diverso?': 'Como te enteraste de Campus Diverso',
-}
+def _obtener_mapeo_raw_a_cleaned() -> dict[str, str]:
+	mapeo: dict[str, str] = {}
+	for canonico, aliases in ALIAS_COLUMNAS_CLEANED.items():
+		for alias in aliases:
+			if alias in COLUMNAS_EXACTAS_RAW:
+				mapeo[alias] = canonico
+	for col in COLUMNAS_FINAL_CLEANED:
+		if col in COLUMNAS_EXACTAS_RAW:
+			mapeo[col] = col
+	return mapeo
 
 GRAFICAS_INICIALES = [
 	'identidad_genero',
@@ -554,41 +525,7 @@ def limpiar_columnas_unnamed(df: pd.DataFrame) -> pd.DataFrame:
 	return df.loc[:, columnas_validas].copy()
 
 
-def validar_columnas_exactas_df_raw(df: pd.DataFrame, columnas_esperadas: Sequence[str] = COLUMNAS_EXACTAS_RAW) -> None:
-	columnas_actuales = obtener_columnas_df_raw(df)
 
-	if columnas_actuales == list(columnas_esperadas):
-		print('La estructura exacta de columnas de df_raw coincide con lo esperado.')
-		return
-
-	faltantes = [col for col in columnas_esperadas if col not in columnas_actuales]
-	adicionales = [col for col in columnas_actuales if col not in columnas_esperadas]
-
-	diferencias_orden: list[str] = []
-	for indice, (esperada, actual) in enumerate(zip(columnas_esperadas, columnas_actuales), start=1):
-		if esperada != actual:
-			diferencias_orden.append(
-				f"Posición {indice}: se esperaba '{esperada}' y se encontró '{actual}'"
-			)
-		if len(diferencias_orden) == 5:
-			break
-
-	mensaje = 'La estructura exacta de columnas de df_raw no coincide con la versión esperada.'
-
-	if faltantes:
-		mensaje += f"\n- Columnas faltantes: {', '.join([repr(col) for col in faltantes])}"
-	if adicionales:
-		mensaje += f"\n- Columnas adicionales: {', '.join([repr(col) for col in adicionales])}"
-	if diferencias_orden:
-		mensaje += '\n- Primeras diferencias de orden detectadas:'
-		for diferencia in diferencias_orden:
-			mensaje += f'\n  {diferencia}'
-
-	mensaje += '\n- Columnas detectadas actualmente en df_raw:'
-	for indice, columna in enumerate(columnas_actuales, start=1):
-		mensaje += f'\n  {indice}. {columna}'
-
-	lanzar_error_validacion(mensaje)
 
 
 def validar_esquema_cleaned_minimo(
@@ -768,10 +705,11 @@ def construir_dataframe_cleaned(
 	else:
 		df = limpiar_columnas_unnamed(df_entrada.copy())
 
+		mapeo_raw_a_cleaned = _obtener_mapeo_raw_a_cleaned()
 		# Para bases raw, las columnas opcionales del MAPEO también pueden estar ausentes
 		columnas_raw_obligatorias = {
-			col for col in MAPEO_COLUMNAS_CLEANED
-			if MAPEO_COLUMNAS_CLEANED[col] not in COLUMNAS_OPCIONALES_CLEANED
+			col for col in mapeo_raw_a_cleaned
+			if mapeo_raw_a_cleaned[col] not in COLUMNAS_OPCIONALES_CLEANED
 		}
 		for columna in columnas_raw_obligatorias:
 			if columna not in df.columns:
@@ -780,7 +718,7 @@ def construir_dataframe_cleaned(
 				)
 
 		# Construir df_cleaned con las columnas disponibles del mapeo
-		columnas_mapeo_disponibles = {k: v for k, v in MAPEO_COLUMNAS_CLEANED.items() if k in df.columns}
+		columnas_mapeo_disponibles = {k: v for k, v in mapeo_raw_a_cleaned.items() if k in df.columns}
 		df_cleaned = df[list(columnas_mapeo_disponibles.keys())].rename(columns=columnas_mapeo_disponibles)
 
 		# Rellenar columnas opcionales ausentes

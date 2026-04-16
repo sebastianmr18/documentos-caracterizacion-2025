@@ -25,14 +25,6 @@ def mostrar_mensaje(texto: str) -> None:
     display(Markdown(texto))
 
 
-def mostrar_resumen_calidad(df_cleaned: Any) -> None:
-    resumen = {
-        'Filas totales': len(df_cleaned),
-        'Columnas totales': len(df_cleaned.columns),
-    }
-    mostrar_titulo('Resumen de calidad')
-    for clave, valor in resumen.items():
-        print(f'{clave}: {valor}')
 
 
 def esta_en_colab() -> bool:
