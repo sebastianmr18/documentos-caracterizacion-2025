@@ -4,7 +4,9 @@ from pathlib import Path
 from typing import Final
 
 import matplotlib.pyplot as plt
+import seaborn as sns
 import pandas as pd
+import numpy as np
 
 from .processing import GRAFICAS_INICIALES, VALOR_RELLENO_CATEGORICO
 
@@ -30,23 +32,23 @@ def guardar_figura(figura: plt.Figure, ruta_archivo: str | Path) -> None:
 	plt.close(figura)
 
 
-def preparar_serie_categorica(
+def preparar_dataframe_categorico(
 	df: pd.DataFrame,
 	columna: str,
 	max_categorias: int = 10,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
-) -> pd.Series:
-	serie = (
-		df[columna]
+) -> tuple[pd.DataFrame, list[str]]:
+	df_plot = df.copy()
+	df_plot[columna] = (
+		df_plot[columna]
 		.fillna(valor_relleno_categorico)
 		.astype(str)
 		.str.strip()
 		.replace('', valor_relleno_categorico)
-		.value_counts(dropna=False)
-		.head(max_categorias)
-		.sort_values(ascending=True)
 	)
-	return serie
+	top_categorias = df_plot[columna].value_counts().head(max_categorias).index.tolist()
+	df_plot = df_plot[df_plot[columna].isin(top_categorias)]
+	return df_plot, top_categorias
 
 
 def generar_grafica_barras_horizontales(
@@ -59,15 +61,36 @@ def generar_grafica_barras_horizontales(
 	color_principal: str = COLOR_PRINCIPAL,
 ) -> Path:
 	configurar_estilo()
-	serie = preparar_serie_categorica(df, columna, max_categorias, valor_relleno_categorico)
+	df_plot, orden = preparar_dataframe_categorico(df, columna, max_categorias, valor_relleno_categorico)
+
 	figura, eje = plt.subplots()
-	eje.barh(serie.index, serie.values, color=color_principal)
-	eje.set_title(titulo)
+	multianual = 'Año de análisis' in df_plot.columns and df_plot['Año de análisis'].nunique() > 1
+
+	if multianual:
+		sns.countplot(
+			data=df_plot,
+			y=columna,
+			hue='Año de análisis',
+			order=orden,
+			ax=eje,
+			palette='viridis'
+		)
+		eje.set_title(f"{titulo} (Comparativo por Año)")
+	else:
+		sns.countplot(
+			data=df_plot,
+			y=columna,
+			order=orden,
+			ax=eje,
+			color=color_principal
+		)
+		eje.set_title(titulo)
+
 	eje.set_xlabel('Cantidad de registros')
 	eje.set_ylabel('Categoría')
 
-	for indice, valor in enumerate(serie.values):
-		eje.text(valor, indice, f' {int(valor)}', va='center')
+	for container in eje.containers:
+		eje.bar_label(container, padding=3, fmt='%.0f')
 
 	figura.tight_layout()
 	ruta_destino = Path(ruta_salida)
@@ -81,22 +104,40 @@ def generar_histograma_edades(
 	color_secundario: str = COLOR_SECUNDARIO,
 ) -> Path:
 	configurar_estilo()
-	edades = df['Edad'].dropna()
 	figura, eje = plt.subplots()
-	eje.hist(
-		edades,
-		bins=min(10, max(5, edades.nunique() if not edades.empty else 5)),
-		color=color_secundario,
-		edgecolor='white',
-	)
-	eje.set_title('Distribución de edades')
+
+	multianual = 'Año de análisis' in df.columns and df['Año de análisis'].nunique() > 1
+
+	if multianual:
+		sns.histplot(
+			data=df,
+			x='Edad',
+			hue='Año de análisis',
+			multiple='dodge',
+			bins=10,
+			ax=eje,
+			palette='viridis',
+			shrink=0.8
+		)
+		eje.set_title('Distribución de edades (Comparativo por Año)')
+	else:
+		edades = df['Edad'].dropna()
+		sns.histplot(
+			data=df,
+			x='Edad',
+			bins=min(10, max(5, edades.nunique() if not edades.empty else 5)),
+			ax=eje,
+			color=color_secundario,
+			edgecolor='white'
+		)
+		eje.set_title('Distribución de edades')
+
 	eje.set_xlabel('Edad')
 	eje.set_ylabel('Cantidad de registros')
 	figura.tight_layout()
 	ruta_destino = Path(ruta_salida)
 	guardar_figura(figura, ruta_destino)
 	return ruta_destino
-
 
 def generar_tabla_resumen_como_imagen(
 	df_resumen: pd.DataFrame,
@@ -136,7 +177,7 @@ def generar_salidas_iniciales(
 
 	catalogo = {
 		'identidad_genero': ('Identidad de género', 'Distribución por identidad de género', '01_identidad_genero.png'),
-		'orientacion_sexual': ('Orientación sexual', 'Distribución por orientación sexual', '02_orientacion_sexual.png'),
+		'orientacion_sexual': ('Orientación sexual', 'Distribución por orientacion sexual', '02_orientacion_sexual.png'),
 		'estamento': ('Estamento', 'Distribución por estamento', '03_estamento.png'),
 		'sede': ('Sede de la Universidad del Valle', 'Distribución por sede', '04_sede.png'),
 		'estrato': ('Estrato socioeconómico', 'Distribución por estrato socioeconómico', '05_estrato.png'),

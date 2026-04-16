@@ -43,18 +43,18 @@ def esta_en_colab() -> bool:
     return True
 
 
-def obtener_archivo_subido_colab() -> str:
+def obtener_archivos_subidos_colab() -> list[str]:
     if not esta_en_colab():
         raise RuntimeError(
             'La carga manual automática está diseñada para Google Colab. '
-            'Si estás en otro entorno, define la ruta del archivo manualmente.'
+            'Si estás en otro entorno, define las rutas de los archivos manualmente.'
         )
 
     archivos = _obtener_files_colab().upload()
     if not archivos:
-        raise RuntimeError('No se cargó ningún archivo. Por favor selecciona un archivo Excel.')
+        raise RuntimeError('No se cargó ningún archivo. Por favor selecciona uno o más archivos Excel.')
 
-    return str(next(iter(archivos.keys())))
+    return list(archivos.keys())
 
 
 def descargar_archivo_si_aplica(ruta_archivo: str | Path, descargar: bool = True) -> None:
