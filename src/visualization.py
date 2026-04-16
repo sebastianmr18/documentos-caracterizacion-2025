@@ -45,10 +45,9 @@ def obtener_paleta_colores(df_plot: pd.DataFrame, multianual: bool) -> dict | st
 	paleta = {}
 	colores_pasados = ['#bbbbbb', '#888888', '#555555', '#222222']
 	for idx, anio in enumerate(anios):
-		if anio == anios[-1]:  # El más reciente
-			paleta[anio] = COLOR_PRINCIPAL
-		else:
-			paleta[anio] = colores_pasados[idx % len(colores_pasados)]
+		color = COLOR_PRINCIPAL if anio == anios[-1] else colores_pasados[idx % len(colores_pasados)]
+		paleta[anio] = color
+		paleta[str(anio)] = color
 	return paleta
 
 
@@ -308,7 +307,7 @@ def generar_graficas_combinadas(
 			continue
 			
 		tipo = cfg[0]
-		ruta_archivo = carpeta_destino / cfg[-1] if len(cfg) >= 4 else carpeta_destino / f'{clave}.png'
+		ruta_archivo = carpeta_destino / cfg[3] if len(cfg) >= 4 else carpeta_destino / f'{clave}.png'
 		
 		# Proteger cada generación con un try/except para que no rompa el flujo por una columna ausente/vacía
 		try:
