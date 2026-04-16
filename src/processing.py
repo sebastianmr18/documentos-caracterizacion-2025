@@ -151,7 +151,112 @@ COLUMNAS_FINAL_CLEANED = [
 	'Como te enteraste de Campus Diverso',
 ]
 
-COLUMNAS_MINIMAS_CLEANED = COLUMNAS_FINAL_CLEANED[1:]
+# Columnas que pueden estar ausentes en algunos años y NO son requisito mínimo.
+# Si faltan en el archivo, se rellenan con VALOR_RELLENO_CATEGORICO (o NaT para fechas).
+COLUMNAS_OPCIONALES_CLEANED = [
+	'Fecha de nacimiento',                                                                # Ausente en 2024
+	'Si eres empleado/a/e o independiente ¿A qué te dedicas específicamente?',           # Ausente en 2024
+	'¿Tienes alguna creencia religiosa? ¿Cuál es?',                                      # Ausente en 2023
+]
+
+# Columnas que SIEMPRE deben estar en cualquier año (excluye Año de análisis y opcionales).
+COLUMNAS_MINIMAS_CLEANED = [
+	col for col in COLUMNAS_FINAL_CLEANED
+	if col != 'Año de análisis' and col not in COLUMNAS_OPCIONALES_CLEANED
+]
+
+# Diccionario de alias conocidos: clave = nombre canónico CLEANED, valor = lista de variantes
+# conocidas de otros años (2023/2024) y de esquemas RAW. Se usa como primera capa de
+# homologación antes del fuzzy-matching genérico.
+ALIAS_COLUMNAS_CLEANED: dict[str, list[str]] = {
+	# ------------------------------------------------------------------
+	# Variaciones de ITERACIÓN 1 (diferencias entre años CLEANED)
+	# ------------------------------------------------------------------
+	'Estrato socioeconómico': [
+		'Estrato',                          # 2024 simplificado
+	],
+	'Ciudad, municipio o corregimiento de nacimiento': [
+		'Ciudad nacimiento',                # 2024 simplificado
+	],
+	'Departamento de nacimiento': [
+		'Departamento',                     # 2024 simplificado
+	],
+	'Ciudad, municipio o corregimiento de residencia': [
+		'Ciudad residencia',                # 2024 simplificado
+	],
+	'Zona de residencia': [
+		'Zona residencia',                  # 2024 (falta "de")
+	],
+	'Barrio de residencia': [
+		'Barrio residencia',                # 2024 (falta "de")
+	],
+	'Nombre del programa académico': [
+		'Nombre y código del programa académico',   # 2024 ampliado
+	],
+	'¿Cuál es tu ocupación actual?': [
+		'Ocupación',                        # 2024 simplificado
+	],
+	'¿En los últimos 3 meses has recibido alguno de los siguientes tipos de acompañamiento/orientación de acuerdo con tu situación, experiencia o proceso personal en otro espacio, colectivo, organización privada o servicio de salud?': [
+		'¿Anteriormente, has recibido acompañamiento/orientación de acuerdo con tu situación, experiencia o proceso personal en otro espacio, colectivo, organización privada o servicio de salud?',  # 2024 cambio semántico
+	],
+	'Redes de apoyo (Identifica ¿con quiénes/qué apoyos cuentas?)': [
+		'Redes de apoyo (Identifica con quiénes o con qué apoyos cuentas)',    # 2023 (usa "o" en lugar de "/")
+		'Redes de apoyo (Identifica con quiénes o con qué apoyos cuentas)',    # RAW 2025
+	],
+	'Como te enteraste de Campus Diverso': [
+		'¿Cómo te enteraste de los servicios de Campus Diverso?',   # 2023 (tiene "servicios" y signos ¿?)
+		'Como te enteraste de Campus Diverso',                       # 2024 (sin tilde en "Como", mantener)
+		'¿Cómo te enteraste de Campus Diverso?',                    # variante posible
+		'Como te enterasta de Campus Diverso',                      # typo en versión CLEANED 2025
+	],
+	# ------------------------------------------------------------------
+	# Variaciones RAW → CLEANED (simplificaciones de preguntas largas)
+	# ------------------------------------------------------------------
+	'Identidad étnica': [
+		'Auto-reconocimiento étnico (Hace referencia al sentido de pertenencia que expresa una persona frente a un colectivo, de acuerdo con su identidad y formas de interactuar en y con el mundo) ',
+		'Auto-reconocimiento étnico (Hace referencia al sentido de pertenencia que expresa una persona frente a un colectivo, de acuerdo con su identidad y formas de interactuar en y con el mundo)',
+		'Identidad étnica',
+	],
+	'Grupo poblacional': [
+		'¿A qué grupo poblacional perteneces?',
+	],
+	'Identidad de género': [
+		'¿Cuál es tu identidad de géneros? ( es decir, ¿Cómo te vives, sientes, percibes, etc.?)',
+		'¿Cuál es tu identidad de géneros? (es decir, ¿Cómo te vives, sientes, percibes, etc.?)',
+	],
+	'Expresión de género': [
+		'Expresión de género (¿Cuál es tu apariencia?/¿cómo te muestras al mundo?)',
+	],
+	'Orientación sexual': [
+		'¿Cuál es tu orientación sexual?  es decir,  ¿Quién/es te gusta(n) o  atrae(n)?',
+		'¿Cuál es tu orientación sexual? es decir, ¿Quién/es te gusta(n) o atrae(n)?',
+	],
+	'Cambio de nombre/sexo en D.I': [
+		'¿Has realizado cambio de nombre y/o del componente sexo en tu documento de identidad?',
+	],
+	'Impedimento cambio D.I': [
+		'Si la respuesta a la pregunta anterior fue "NO" o sólo cambiaste uno de los dos componentes, ¿Qué te impidió realizar el cambio?',
+		'Si la respuesta a la pregunta anterior fue \'NO\' o sólo cambiaste uno de los dos componentes, ¿Qué te impidió realizar el cambio?',
+	],
+	'Asesoría cambio D.I': [
+		'Por favor indícanos si te gustaría recibir orientación para realizar el cambio de nombre y/o sexo en tu documento de identidad.',
+	],
+	'Pertenencia a la U': [
+		'¿Perteneces a la Universidad del Valle?',
+	],
+	'Sede de la Universidad del Valle': [
+		'Sede de la universidad a la que pertenece',
+	],
+	'Entidad acompañamiento': [
+		'¿En qué tipo de entidad recibiste el acompañamiento?',
+	],
+	'Profesional acompañante': [
+		'¿Qué profesional le brindó la atención?',
+	],
+	'¿De donde provienen tus ingresos o recursos?': [
+		'¿Cuál(es) es/son tu(s) fuente(s) de ingresos?',
+	],
+}
 
 MAPEO_COLUMNAS_CLEANED = {
 	'Fecha de nacimiento': 'Fecha de nacimiento',
@@ -304,15 +409,45 @@ def mostrar_debug_validacion_tipo_base(df: pd.DataFrame, title_callback: TitleCa
 		print('')
 
 
-def detectar_tipo_base(df: pd.DataFrame) -> str:
-	columnas_actuales_normalizadas = set(normalizar_lista_columnas(obtener_columnas_df_raw(df)))
-	columnas_raw_normalizadas = normalizar_lista_columnas(COLUMNAS_EXACTAS_RAW)
-	columnas_cleaned_minimas_normalizadas = set(normalizar_lista_columnas(COLUMNAS_MINIMAS_CLEANED))
+def _construir_mapa_alias_normalizado() -> dict[str, str]:
+	"""Construye un mapa {alias_normalizado: canonico} desde ALIAS_COLUMNAS_CLEANED."""
+	mapa: dict[str, str] = {}
+	for canonico, aliases in ALIAS_COLUMNAS_CLEANED.items():
+		for alias in aliases:
+			mapa[normalizar_texto(alias)] = canonico
+		# El propio nombre canónico también es un alias de sí mismo
+		mapa[normalizar_texto(canonico)] = canonico
+	return mapa
 
-	if normalizar_lista_columnas(obtener_columnas_df_raw(df)) == columnas_raw_normalizadas:
+
+def detectar_tipo_base(df: pd.DataFrame) -> str:
+	columnas_actuales = obtener_columnas_df_raw(df)
+	columnas_actuales_normalizadas = set(normalizar_lista_columnas(columnas_actuales))
+	columnas_raw_normalizadas = normalizar_lista_columnas(COLUMNAS_EXACTAS_RAW)
+
+	# 1. Verificar raw exacto
+	if normalizar_lista_columnas(columnas_actuales) == columnas_raw_normalizadas:
 		return 'raw'
+
+	# 2. Verificar cleaned con coincidencia exacta normalizada
+	columnas_cleaned_minimas_normalizadas = set(normalizar_lista_columnas(COLUMNAS_MINIMAS_CLEANED))
 	if columnas_cleaned_minimas_normalizadas.issubset(columnas_actuales_normalizadas):
 		return 'cleaned'
+
+	# 3. Intentar resolución vía alias: si tras renombrar con el diccionario de alias
+	#    las columnas mínimas quedan cubiertas, es cleaned.
+	mapa_alias = _construir_mapa_alias_normalizado()
+	columnas_resueltas = set()
+	for col_norm in columnas_actuales_normalizadas:
+		canonica = mapa_alias.get(col_norm)
+		if canonica:
+			columnas_resueltas.add(normalizar_texto(canonica))
+		else:
+			columnas_resueltas.add(col_norm)
+
+	if columnas_cleaned_minimas_normalizadas.issubset(columnas_resueltas):
+		return 'cleaned'
+
 	return 'desconocido'
 
 
@@ -322,10 +457,24 @@ def homologar_columnas(
 	umbral_fuzzy: float = 0.60,
 	title_callback: TitleCallback | None = None,
 ) -> tuple[pd.DataFrame, list[tuple[str, str]], list[str]]:
+	"""Renombra columnas del df al nombre canónico usando tres capas en orden:
+	1. Coincidencia normalizada exacta.
+	2. Diccionario de alias conocidos (ALIAS_COLUMNAS_CLEANED).
+	3. Fuzzy matching como fallback.
+	"""
 	columnas_actuales = obtener_columnas_df_raw(df)
-	
+
+	# Mapa esperado: normalizado -> canónico
 	columnas_esperadas_normalizadas = {
 		normalizar_texto(columna): columna for columna in columnas_esperadas
+	}
+
+	# Mapa alias: alias_normalizado -> canónico (solo para columnas que están en columnas_esperadas)
+	mapa_alias_global = _construir_mapa_alias_normalizado()
+	mapa_alias_filtrado: dict[str, str] = {
+		alias_norm: canonico
+		for alias_norm, canonico in mapa_alias_global.items()
+		if canonico in columnas_esperadas
 	}
 
 	renombres: dict[str, str] = {}
@@ -333,21 +482,29 @@ def homologar_columnas(
 
 	for columna_actual in columnas_actuales:
 		columna_normalizada = normalizar_texto(columna_actual)
+
+		# Capa 1: coincidencia exacta normalizada
 		columna_canonica = columnas_esperadas_normalizadas.get(columna_normalizada)
-		
-		# Regularización Fuzzy si no existe coincidencia exacta
+
+		# Capa 2: alias conocidos
+		if not columna_canonica:
+			columna_canonica = mapa_alias_filtrado.get(columna_normalizada)
+			if columna_canonica and columna_canonica not in columnas_esperadas:
+				columna_canonica = None  # alias no aplica a este esquema
+
+		# Capa 3: fuzzy matching genérico
 		if not columna_canonica:
 			coincidencias = difflib.get_close_matches(
-				columna_normalizada, 
-				list(columnas_esperadas_normalizadas.keys()), 
-				n=1, 
-				cutoff=umbral_fuzzy
+				columna_normalizada,
+				list(columnas_esperadas_normalizadas.keys()),
+				n=1,
+				cutoff=umbral_fuzzy,
 			)
 			if coincidencias:
 				columna_canonica = columnas_esperadas_normalizadas[coincidencias[0]]
-				
+
 		if columna_canonica:
-			if columna_canonica not in renombres.values(): # Evitar mapear dos columnas al mismo target
+			if columna_canonica not in renombres.values():  # Evitar mapear dos col. al mismo target
 				renombres[columna_actual] = columna_canonica
 			else:
 				columnas_sin_equivalencia.append(columna_actual)
@@ -413,24 +570,40 @@ def validar_columnas_exactas_df_raw(df: pd.DataFrame, columnas_esperadas: Sequen
 	lanzar_error_validacion(mensaje)
 
 
-def validar_esquema_cleaned_minimo(df: pd.DataFrame, columnas_esperadas: Sequence[str] = COLUMNAS_MINIMAS_CLEANED) -> None:
-	columnas_actuales = obtener_columnas_df_raw(df)
-	faltantes = [col for col in columnas_esperadas if col not in columnas_actuales]
+def validar_esquema_cleaned_minimo(
+	df: pd.DataFrame,
+	columnas_minimas: Sequence[str] = COLUMNAS_MINIMAS_CLEANED,
+	columnas_opcionales: Sequence[str] = COLUMNAS_OPCIONALES_CLEANED,
+) -> None:
+	"""Valida que el DataFrame contenga todas las columnas mínimas obligatorias.
+	Las columnas opcionales generan un aviso si faltan pero NO interrumpen el flujo.
+	"""
+	columnas_actuales = set(obtener_columnas_df_raw(df))
 
-	if not faltantes:
-		print('La estructura base de columnas de la versión cleaned coincide con lo esperado (se incluyen todas las requeridas).')
-		adicionales = [col for col in columnas_actuales if col not in columnas_esperadas and col != "Año de análisis"]
-		if adicionales:
-			print('\nNota: Se detectaron columnas accesorias (las cuales serán omitidas de la salida estandarizada):')
-			for col in adicionales:
-				print(f"  - {col}")
-		return
+	# Columnas mínimas obligatorias
+	faltantes_obligatorias = [col for col in columnas_minimas if col not in columnas_actuales]
+	if faltantes_obligatorias:
+		mensaje = f"La base de datos es inválida. Faltan {len(faltantes_obligatorias)} columnas obligatorias del esquema CLEANED:"
+		for col in faltantes_obligatorias:
+			mensaje += f"\n- '{col}'"
+		lanzar_error_validacion(mensaje)
 
-	mensaje = f"La estructura de la base de datos es inválida. Faltan {len(faltantes)} columnas requeridas del esquema CLEANED:"
-	for col in faltantes:
-		mensaje += f"\n- '{col}'"
+	print('Columnas obligatorias: todas presentes ✓')
 
-	lanzar_error_validacion(mensaje)
+	# Columnas opcionales: aviso si faltan
+	faltantes_opcionales = [col for col in columnas_opcionales if col not in columnas_actuales]
+	if faltantes_opcionales:
+		print(f'Aviso: Las siguientes {len(faltantes_opcionales)} columna(s) opcionales no están en el archivo y se rellenarán con \'Sin dato\'/')
+		for col in faltantes_opcionales:
+			print(f"  - '{col}'")
+
+	# Columnas extras no reconocidas (informativo)
+	todas_conocidas = set(columnas_minimas) | set(columnas_opcionales) | {'Año de análisis'}
+	adicionales = [col for col in columnas_actuales if col not in todas_conocidas]
+	if adicionales:
+		print(f'Nota: Se omitirán {len(adicionales)} columnas no reconocidas de la salida:')
+		for col in adicionales:
+			print(f"  - {col}")
 
 
 def validar_columnas_obligatorias(df: pd.DataFrame, columnas_obligatorias: Sequence[str] = COLUMNAS_OBLIGATORIAS_RAW) -> None:
@@ -558,27 +731,47 @@ def construir_dataframe_cleaned(
 
 	if tipo_base == 'cleaned':
 		df_cleaned = df_entrada.copy()
-		df_cleaned['Fecha de nacimiento'] = convertir_a_fecha(
-			df_cleaned['Fecha de nacimiento'],
-			'Fecha de nacimiento',
-		)
+		# Rellenar columnas opcionales ausentes antes de procesar
+		for col_opc in COLUMNAS_OPCIONALES_CLEANED:
+			if col_opc not in df_cleaned.columns:
+				df_cleaned[col_opc] = valor_relleno_categorico
+		# Convertir fecha de nacimiento si existe y no es relleno
+		if 'Fecha de nacimiento' in df_cleaned.columns:
+			df_cleaned['Fecha de nacimiento'] = convertir_a_fecha(
+				df_cleaned['Fecha de nacimiento'],
+				'Fecha de nacimiento',
+			)
 		df_cleaned['Edad'] = pd.to_numeric(df_cleaned['Edad'], errors='coerce')
 	else:
 		df = limpiar_columnas_unnamed(df_entrada.copy())
 
-		for columna in MAPEO_COLUMNAS_CLEANED:
+		# Para bases raw, las columnas opcionales del MAPEO también pueden estar ausentes
+		columnas_raw_obligatorias = {
+			col for col in MAPEO_COLUMNAS_CLEANED
+			if MAPEO_COLUMNAS_CLEANED[col] not in COLUMNAS_OPCIONALES_CLEANED
+		}
+		for columna in columnas_raw_obligatorias:
 			if columna not in df.columns:
 				lanzar_error_validacion(
-					f"No es posible construir la base limpia porque falta la columna '{columna}'."
+					f"No es posible construir la base limpia porque falta la columna obligatoria '{columna}'."
 				)
 
-		df_cleaned = df[list(MAPEO_COLUMNAS_CLEANED.keys())].rename(columns=MAPEO_COLUMNAS_CLEANED)
-		df_cleaned['Fecha de nacimiento'] = convertir_a_fecha(
-			df_cleaned['Fecha de nacimiento'],
-			'Fecha de nacimiento',
-		)
+		# Construir df_cleaned con las columnas disponibles del mapeo
+		columnas_mapeo_disponibles = {k: v for k, v in MAPEO_COLUMNAS_CLEANED.items() if k in df.columns}
+		df_cleaned = df[list(columnas_mapeo_disponibles.keys())].rename(columns=columnas_mapeo_disponibles)
+
+		# Rellenar columnas opcionales ausentes
+		for col_opc in COLUMNAS_OPCIONALES_CLEANED:
+			if col_opc not in df_cleaned.columns:
+				df_cleaned[col_opc] = valor_relleno_categorico
+
+		if 'Fecha de nacimiento' in df_cleaned.columns:
+			df_cleaned['Fecha de nacimiento'] = convertir_a_fecha(
+				df_cleaned['Fecha de nacimiento'],
+				'Fecha de nacimiento',
+			)
 		df_cleaned['Edad'] = calcular_edad_desde_fecha_nacimiento(
-			df_cleaned['Fecha de nacimiento'],
+			df_cleaned.get('Fecha de nacimiento', pd.Series(dtype='object')),
 			año_calculado,
 		)
 
@@ -588,7 +781,7 @@ def construir_dataframe_cleaned(
 	]
 
 	for columna in columnas_categoricas:
-		# Solamente aplica limpieza de texto si la columna de hecho pertenecerá al output
+		# Solamente aplica limpieza de texto si la columna pertenecerá al output
 		if columna in COLUMNAS_FINAL_CLEANED:
 			df_cleaned[columna] = df_cleaned[columna].apply(
 				lambda valor: limpiar_texto_categorico(valor, valor_relleno_categorico)
