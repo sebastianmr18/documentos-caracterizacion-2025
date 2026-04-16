@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from pathlib import Path
 from typing import Final
 
@@ -8,21 +9,24 @@ import seaborn as sns
 import pandas as pd
 import numpy as np
 
-from .processing import GRAFICAS_INICIALES, VALOR_RELLENO_CATEGORICO
+from .processing import VALOR_RELLENO_CATEGORICO
 
-COLOR_PRINCIPAL: Final[str] = '#1f4e79'
+COLOR_PRINCIPAL: Final[str] = '#E3000F'  # Univalle institucional
 COLOR_SECUNDARIO: Final[str] = '#7aa6c2'
+COLOR_TERCIARIO: Final[str] = '#d0d8df'
 
 
 def configurar_estilo() -> None:
 	plt.style.use('seaborn-v0_8-whitegrid')
-	plt.rcParams['figure.figsize'] = (10, 6)
+	plt.rcParams['figure.figsize'] = (11, 7)
 	plt.rcParams['axes.titlesize'] = 14
 	plt.rcParams['axes.labelsize'] = 11
 	plt.rcParams['xtick.labelsize'] = 10
 	plt.rcParams['ytick.labelsize'] = 10
 	plt.rcParams['figure.dpi'] = 120
 	plt.rcParams['savefig.dpi'] = 150
+	# Suppress specific future warnings
+	warnings.simplefilter(action='ignore', category=FutureWarning)
 
 
 def guardar_figura(figura: plt.Figure, ruta_archivo: str | Path) -> None:
@@ -32,13 +36,39 @@ def guardar_figura(figura: plt.Figure, ruta_archivo: str | Path) -> None:
 	plt.close(figura)
 
 
+def obtener_paleta_colores(df_plot: pd.DataFrame, multianual: bool) -> dict | str | list:
+	"""Asigna el color principal al año más reciente, y tonos grises/azules a los pasados."""
+	if not multianual:
+		return COLOR_PRINCIPAL
+		
+	anios = sorted(df_plot['Año de análisis'].unique().tolist())
+	paleta = {}
+	colores_pasados = ['#bbbbbb', '#888888', '#555555', '#222222']
+	for idx, anio in enumerate(anios):
+		if anio == anios[-1]:  # El más reciente
+			paleta[anio] = COLOR_PRINCIPAL
+		else:
+			paleta[anio] = colores_pasados[idx % len(colores_pasados)]
+	return paleta
+
+
 def preparar_dataframe_categorico(
 	df: pd.DataFrame,
 	columna: str,
 	max_categorias: int = 10,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
+	multiple_respuesta: bool = False,
+	separador: str = ','
 ) -> tuple[pd.DataFrame, list[str]]:
 	df_plot = df.copy()
+	
+	if multiple_respuesta:
+		# Expandimos filas si la columna tiene valores como "a, b, c"
+		df_plot[columna] = df_plot[columna].fillna(valor_relleno_categorico).astype(str)
+		# Dividimos por separador y expandimos a múltiples filas
+		df_plot[columna] = df_plot[columna].str.split(separador)
+		df_plot = df_plot.explode(columna)
+		
 	df_plot[columna] = (
 		df_plot[columna]
 		.fillna(valor_relleno_categorico)
@@ -46,51 +76,71 @@ def preparar_dataframe_categorico(
 		.str.strip()
 		.replace('', valor_relleno_categorico)
 	)
-	top_categorias = df_plot[columna].value_counts().head(max_categorias).index.tolist()
+	
+	# Determinar el top de categorías excluyendo "Sin dato" si se puede, para ordenarlo bien.
+	counts = df_plot[columna].value_counts()
+	top_categorias = counts.head(max_categorias).index.tolist()
+	
 	df_plot = df_plot[df_plot[columna].isin(top_categorias)]
 	return df_plot, top_categorias
 
 
-def generar_grafica_barras_horizontales(
+def generar_grafica_barras(
 	df: pd.DataFrame,
 	columna: str,
 	titulo: str,
 	ruta_salida: str | Path,
 	max_categorias: int = 10,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
-	color_principal: str = COLOR_PRINCIPAL,
+	orientacion: str = 'h',
+	multiple_respuesta: bool = False
 ) -> Path:
 	configurar_estilo()
-	df_plot, orden = preparar_dataframe_categorico(df, columna, max_categorias, valor_relleno_categorico)
+	df_plot, orden = preparar_dataframe_categorico(
+		df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta
+	)
 
 	figura, eje = plt.subplots()
 	multianual = 'Año de análisis' in df_plot.columns and df_plot['Año de análisis'].nunique() > 1
+	paleta = obtener_paleta_colores(df_plot, multianual)
 
 	if multianual:
 		sns.countplot(
 			data=df_plot,
-			y=columna,
+			y=columna if orientacion == 'h' else None,
+			x=columna if orientacion == 'v' else None,
 			hue='Año de análisis',
 			order=orden,
 			ax=eje,
-			palette='viridis'
+			palette=paleta
 		)
 		eje.set_title(f"{titulo} (Comparativo por Año)")
 	else:
 		sns.countplot(
 			data=df_plot,
-			y=columna,
+			y=columna if orientacion == 'h' else None,
+			x=columna if orientacion == 'v' else None,
 			order=orden,
 			ax=eje,
-			color=color_principal
+			color=paleta
 		)
 		eje.set_title(titulo)
 
-	eje.set_xlabel('Cantidad de registros')
-	eje.set_ylabel('Categoría')
+	if orientacion == 'h':
+		eje.set_xlabel('Cantidad de registros' + ('/opciones' if multiple_respuesta else ''))
+		eje.set_ylabel('Categoría')
+	else:
+		eje.set_ylabel('Cantidad de registros' + ('/opciones' if multiple_respuesta else ''))
+		eje.set_xlabel('Categoría')
+		# Rotar X ticks si hay muchas
+		plt.xticks(rotation=45, ha='right')
 
 	for container in eje.containers:
-		eje.bar_label(container, padding=3, fmt='%.0f')
+		eje.bar_label(container, padding=3, fmt='%.0f', fontsize=9)
+
+	# Si es multi de barras agrupadas o algo con legend repetitiva
+	if multianual:
+		sns.move_legend(eje, "upper right", bbox_to_anchor=(1.15, 1))
 
 	figura.tight_layout()
 	ruta_destino = Path(ruta_salida)
@@ -98,46 +148,100 @@ def generar_grafica_barras_horizontales(
 	return ruta_destino
 
 
-def generar_histograma_edades(
+def generar_grafica_kde_edades(
 	df: pd.DataFrame,
 	ruta_salida: str | Path,
-	color_secundario: str = COLOR_SECUNDARIO,
 ) -> Path:
 	configurar_estilo()
-	figura, eje = plt.subplots()
+	figura, eje = plt.subplots(figsize=(10, 6))
 
 	multianual = 'Año de análisis' in df.columns and df['Año de análisis'].nunique() > 1
+	df_plot = df.dropna(subset=['Edad']).copy()
+	df_plot['Edad'] = pd.to_numeric(df_plot['Edad'], errors='coerce').dropna()
+
+	if df_plot.empty:
+		# Dummy empty plot si no hay edades validas
+		eje.text(0.5, 0.5, 'Sin datos de edad', ha='center', va='center')
+		guardar_figura(figura, ruta_salida)
+		return Path(ruta_salida)
+
+	paleta = obtener_paleta_colores(df_plot, multianual)
 
 	if multianual:
-		sns.histplot(
-			data=df,
+		sns.kdeplot(
+			data=df_plot,
 			x='Edad',
 			hue='Año de análisis',
-			multiple='dodge',
-			bins=10,
-			ax=eje,
-			palette='viridis',
-			shrink=0.8
+			fill=True,
+			common_norm=False,
+			alpha=0.4,
+			linewidth=2,
+			palette=paleta,
+			ax=eje
 		)
-		eje.set_title('Distribución de edades (Comparativo por Año)')
+		eje.set_title('Distribución de densidad de Edades (Comparativo multianual)')
+		sns.move_legend(eje, "upper right")
 	else:
-		edades = df['Edad'].dropna()
-		sns.histplot(
-			data=df,
+		sns.kdeplot(
+			data=df_plot,
 			x='Edad',
-			bins=min(10, max(5, edades.nunique() if not edades.empty else 5)),
-			ax=eje,
-			color=color_secundario,
-			edgecolor='white'
+			fill=True,
+			color=COLOR_PRINCIPAL,
+			alpha=0.6,
+			ax=eje
 		)
-		eje.set_title('Distribución de edades')
+		eje.set_title('Distribución de Edades')
 
 	eje.set_xlabel('Edad')
-	eje.set_ylabel('Cantidad de registros')
+	eje.set_ylabel('Densidad')
 	figura.tight_layout()
 	ruta_destino = Path(ruta_salida)
 	guardar_figura(figura, ruta_destino)
 	return ruta_destino
+
+
+def generar_boxplot_semestre(
+	df: pd.DataFrame,
+	ruta_salida: str | Path
+) -> Path:
+	configurar_estilo()
+	figura, eje = plt.subplots(figsize=(8, 6))
+
+	df_plot = df.dropna(subset=['Semestre académico']).copy()
+	df_plot['Semestre académico'] = pd.to_numeric(df_plot['Semestre académico'], errors='coerce')
+	df_plot = df_plot.dropna(subset=['Semestre académico'])
+
+	multianual = 'Año de análisis' in df.columns and df['Año de análisis'].nunique() > 1
+	paleta = obtener_paleta_colores(df_plot, multianual)
+
+	if df_plot.empty:
+		eje.text(0.5, 0.5, 'Sin datos o semestre invalido', ha='center')
+	elif multianual:
+		sns.boxplot(
+			data=df_plot,
+			x='Año de análisis',
+			y='Semestre académico',
+			palette=paleta,
+			ax=eje,
+			width=0.5
+		)
+		eje.set_title('Variación del Semestre Académico cursado por año')
+	else:
+		sns.boxplot(
+			data=df_plot,
+			y='Semestre académico',
+			color=COLOR_PRINCIPAL,
+			ax=eje,
+			width=0.3
+		)
+		eje.set_title('Distribución de Semestre Académico')
+
+	eje.set_ylabel('Semestre')
+	figura.tight_layout()
+	ruta_destino = Path(ruta_salida)
+	guardar_figura(figura, ruta_destino)
+	return ruta_destino
+
 
 def generar_tabla_resumen_como_imagen(
 	df_resumen: pd.DataFrame,
@@ -163,11 +267,11 @@ def generar_tabla_resumen_como_imagen(
 	return ruta_destino
 
 
-def generar_salidas_iniciales(
+def generar_graficas_combinadas(
 	df_cleaned: pd.DataFrame,
 	resumen_calidad: pd.DataFrame,
 	carpeta_salida: str | Path,
-	graficas_iniciales: list[str] | None = None,
+	graficas_activas: list[str] | None = None,
 	max_categorias: int = 10,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 ) -> list[Path]:
@@ -175,35 +279,163 @@ def generar_salidas_iniciales(
 	carpeta_destino.mkdir(parents=True, exist_ok=True)
 	rutas_generadas: list[Path] = []
 
-	catalogo = {
-		'identidad_genero': ('Identidad de género', 'Distribución por identidad de género', '01_identidad_genero.png'),
-		'orientacion_sexual': ('Orientación sexual', 'Distribución por orientacion sexual', '02_orientacion_sexual.png'),
-		'estamento': ('Estamento', 'Distribución por estamento', '03_estamento.png'),
-		'sede': ('Sede de la Universidad del Valle', 'Distribución por sede', '04_sede.png'),
-		'estrato': ('Estrato socioeconómico', 'Distribución por estrato socioeconómico', '05_estrato.png'),
+	# (Clave: (Tipo_Generador, Columna, Titulo, Nombre_Archivo, Orientacion, kwargs))
+	CATALOGO_COMBINADAS = {
+		'edad': ('kde', '', '', '00_distribucion_edades.png'),
+		'estrato': ('bar', 'Estrato socioeconómico', 'Distribución por Estrato', '01_estrato_socioeconomico.png', 'v'),
+		'zona_residencia': ('bar', 'Zona de residencia', 'Residencia Urbana vs Rural', '02_zona_residencia.png', 'v'),
+		'estado_civil': ('bar', 'Estado civil', 'Estado civil de la población', '03_estado_civil.png', 'v'),
+		'identidad_etnica': ('bar', 'Identidad étnica', 'Distribución de Identidad étnica', '04_identidad_etnica.png', 'h'),
+		'grupo_poblacional': ('bar', 'Grupo poblacional', 'Pertenencia a grupos poblacionales', '05_grupo_poblacional.png', 'h'),
+		'identidad_genero': ('bar', 'Identidad de género', 'Distribución de Identidad de género', '06_identidad_genero.png', 'h'),
+		'expresion_genero': ('bar', 'Expresión de género', 'Diversidad en Expresión de género', '07_expresion_genero.png', 'h'),
+		'orientacion_sexual': ('bar', 'Orientación sexual', 'Diversidad en Orientación sexual', '08_orientacion_sexual.png', 'h'),
+		'cambio_di': ('bar', 'Cambio de nombre/sexo en D.I', 'Realizaron cambio legal en D.I', '09_cambio_di.png', 'v'),
+		'asesoria_di': ('bar', 'Asesoría cambio D.I', 'Interés en recibir asesoría para D.I', '10_asesoria_di.png', 'v'),
+		'estamento': ('bar', 'Estamento', 'Distribución por Estamento', '11_estamento.png', 'h'),
+		'semestre': ('boxplot', '', '', '12_semestre_academico.png'),
+		'ocupacion': ('bar', '¿Cuál es tu ocupación actual?', 'Ocupación principal actual', '13_ocupacion.png', 'h'),
+		'acompanamiento': ('bar_multiple', '¿En los últimos 3 meses has recibido alguno de los siguientes tipos de acompañamiento/orientación de acuerdo con tu situación, experiencia o proceso personal en otro espacio, colectivo, organización privada o servicio de salud?', 'Tipos de acompañamiento recibido', '14_acompanamiento.png', 'h'),
+		'enteraste': ('bar_multiple', 'Como te enteraste de Campus Diverso', 'Tasa de difusión de Campus Diverso', '15_enteraste.png', 'h')
 	}
 
-	for clave in graficas_iniciales or GRAFICAS_INICIALES:
-		if clave in catalogo:
-			columna, titulo, nombre_archivo = catalogo[clave]
-			ruta_archivo = carpeta_destino / nombre_archivo
-			rutas_generadas.append(
-				generar_grafica_barras_horizontales(
-					df_cleaned,
-					columna,
-					titulo,
-					ruta_archivo,
-					max_categorias=max_categorias,
-					valor_relleno_categorico=valor_relleno_categorico,
-				)
-			)
-		elif clave == 'edad':
-			ruta_archivo = carpeta_destino / '06_edades.png'
-			rutas_generadas.append(generar_histograma_edades(df_cleaned, ruta_archivo))
+	# Generar tabla
+	ruta_tabla = generar_tabla_resumen_como_imagen(resumen_calidad, carpeta_destino / 'resumen_calidad.png')
+	rutas_generadas.append(ruta_tabla)
 
-	ruta_tabla = generar_tabla_resumen_como_imagen(
-		resumen_calidad,
-		carpeta_destino / '00_resumen_calidad.png',
+	for clave, cfg in CATALOGO_COMBINADAS.items():
+		if graficas_activas and clave not in graficas_activas:
+			continue
+			
+		tipo = cfg[0]
+		ruta_archivo = carpeta_destino / cfg[-1] if len(cfg) >= 4 else carpeta_destino / f'{clave}.png'
+		
+		# Proteger cada generación con un try/except para que no rompa el flujo por una columna ausente/vacía
+		try:
+			if tipo == 'kde':
+				rutas_generadas.append(generar_grafica_kde_edades(df_cleaned, ruta_archivo))
+			elif tipo == 'boxplot':
+				rutas_generadas.append(generar_boxplot_semestre(df_cleaned, ruta_archivo))
+			elif tipo == 'bar':
+				col = cfg[1]
+				tit = cfg[2]
+				ori = cfg[4]
+				if col in df_cleaned.columns:
+					rutas_generadas.append(generar_grafica_barras(df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, ori, False))
+			elif tipo == 'bar_multiple':
+				col = cfg[1]
+				tit = cfg[2]
+				ori = cfg[4]
+				if col in df_cleaned.columns:
+					rutas_generadas.append(generar_grafica_barras(df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, ori, True))
+		except Exception as e:
+			print(f"Advertencia: No se pudo generar gráfica '{clave}': {e}")
+
+	return rutas_generadas
+
+
+def generar_grafica_separada_barras(
+	df: pd.DataFrame,
+	columna: str,
+	titulo: str,
+	ruta_salida: str | Path,
+	max_categorias: int = 10,
+	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
+	multiple_respuesta: bool = False
+) -> Path:
+	configurar_estilo()
+	df_plot, orden = preparar_dataframe_categorico(
+		df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta
 	)
-	rutas_generadas.insert(0, ruta_tabla)
+
+	multianual = 'Año de análisis' in df_plot.columns and df_plot['Año de análisis'].nunique() > 1
+
+	if multianual:
+		# Asignar un solo color sólido por año iterando catplot
+		paleta = obtener_paleta_colores(df_plot, multianual)
+		# Convertir diccionario a lista en orden de los años si es necesario, 
+		# pero hue='Año de análisis' lo hace auto. En un facetado sin hue, podemos usar kwargs.
+		g = sns.catplot(
+			data=df_plot,
+			y=columna,
+			col='Año de análisis',
+			kind='count',
+			order=orden,
+			col_wrap=2,
+			height=4.5,
+			aspect=1.2,
+			color=COLOR_SECUNDARIO,
+			sharex=False
+		)
+		g.set_titles("Año: {col_name}")
+		g.set_axis_labels("Cantidad de registros", "")
+		g.fig.suptitle(titulo, y=1.05)
+		
+		for ax in g.axes.flat:
+			for container in ax.containers:
+				ax.bar_label(container, padding=3, fmt='%.0f', fontsize=8)
+				
+		figura = g.fig
+	else:
+		figura, eje = plt.subplots(figsize=(8, 5))
+		sns.countplot(
+			data=df_plot,
+			y=columna,
+			order=orden,
+			ax=eje,
+			color=COLOR_PRINCIPAL
+		)
+		eje.set_title(titulo)
+		eje.set_xlabel('Cantidad de registros')
+		eje.set_ylabel('')
+		for container in eje.containers:
+			eje.bar_label(container, padding=3, fmt='%.0f', fontsize=9)
+		figura.tight_layout()
+
+	ruta_destino = Path(ruta_salida)
+	guardar_figura(figura, ruta_destino)
+	return ruta_destino
+
+
+def generar_graficas_separadas(
+	df_cleaned: pd.DataFrame,
+	carpeta_salida: str | Path,
+	graficas_activas: list[str] | None = None,
+	max_categorias: int = 10,
+	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
+) -> list[Path]:
+	carpeta_destino = Path(carpeta_salida)
+	carpeta_destino.mkdir(parents=True, exist_ok=True)
+	rutas_generadas: list[Path] = []
+
+	CATALOGO_SEPARADAS = {
+		'depto_nacimiento': ('Departamento de nacimiento', 'Top Departamentos de Nacimiento', '16_depto_nacimiento.png', False),
+		'ciudad_nacimiento': ('Ciudad, municipio o corregimiento de nacimiento', 'Top Ciudades de Nacimiento', '17_ciudad_nacimiento.png', False),
+		'ciudad_residencia': ('Ciudad, municipio o corregimiento de residencia', 'Top Ciudades de Residencia', '18_ciudad_residencia.png', False),
+		'impedimento_di': ('Impedimento cambio D.I', 'Impedimentos para cambio legal de D.I', '19_impedimento_di.png', False),
+		'sede_universidad': ('Sede de la Universidad del Valle', 'Sede de la Universidad', '20_sede_universidad.png', False),
+		'programa_academico': ('Nombre del programa académico', 'Top Programas Académicos', '21_programa_academico.png', False),
+		'redes_apoyo': ('Redes de apoyo (Identifica ¿con quiénes/qué apoyos cuentas?)', 'Principales Redes de Apoyo', '22_redes_apoyo.png', True),
+		'factores_riesgo': ('Factores de riesgo (identifica aquello que puede estar poniéndote en riesgo)', 'Principales Factores de Riesgo', '23_factores_riesgo.png', True)
+	}
+
+	for clave, cfg in CATALOGO_SEPARADAS.items():
+		if graficas_activas and clave not in graficas_activas:
+			continue
+			
+		col = cfg[0]
+		tit = cfg[1]
+		ruta_archivo = carpeta_destino / cfg[2]
+		multi = cfg[3]
+		
+		try:
+			if col in df_cleaned.columns:
+				rutas_generadas.append(
+					generar_grafica_separada_barras(
+						df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, multi
+					)
+				)
+		except Exception as e:
+			print(f"Advertencia: No se pudo generar gráfica separada '{clave}': {e}")
+
 	return rutas_generadas

@@ -265,13 +265,34 @@ def _obtener_mapeo_raw_a_cleaned() -> dict[str, str]:
 			mapeo[col] = col
 	return mapeo
 
-GRAFICAS_INICIALES = [
-	'identidad_genero',
-	'orientacion_sexual',
-	'estamento',
-	'sede',
-	'estrato',
+GRAFICAS_COMBINADAS = [
 	'edad',
+	'estrato',
+	'zona_residencia',
+	'estado_civil',
+	'identidad_etnica',
+	'grupo_poblacional',
+	'identidad_genero',
+	'expresion_genero',
+	'orientacion_sexual',
+	'cambio_di',
+	'asesoria_di',
+	'estamento',
+	'semestre',
+	'ocupacion',
+	'acompanamiento',
+	'enteraste'
+]
+
+GRAFICAS_SEPARADAS = [
+	'depto_nacimiento',
+	'ciudad_nacimiento',
+	'ciudad_residencia',
+	'impedimento_di',
+	'sede_universidad',
+	'programa_academico',
+	'redes_apoyo',
+	'factores_riesgo',
 ]
 
 TitleCallback = Callable[[str], None]
