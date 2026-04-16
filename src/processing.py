@@ -420,21 +420,42 @@ def _construir_mapa_alias_normalizado() -> dict[str, str]:
 	return mapa
 
 
+# Columnas que SOLO aparecen en archivos RAW y nunca en CLEANED.
+# Su presencia es suficiente para identificar un archivo como RAW.
+_INDICADORES_RAW = {
+	'Marca temporal',
+	'Dirección de correo electrónico',
+}
+
+
 def detectar_tipo_base(df: pd.DataFrame) -> str:
+	"""Detecta si el DataFrame es 'raw', 'cleaned' o 'desconocido'.
+
+	- 'raw': contiene todas las columnas obligatorias RAW (subconjunto) o
+	         al menos los indicadores exclusivos RAW.
+	- 'cleaned': contiene las columnas mínimas CLEANED (con o sin resolución
+	             de aliases).
+	- 'desconocido': no satisface ningún criterio.
+	"""
 	columnas_actuales = obtener_columnas_df_raw(df)
 	columnas_actuales_normalizadas = set(normalizar_lista_columnas(columnas_actuales))
-	columnas_raw_normalizadas = normalizar_lista_columnas(COLUMNAS_EXACTAS_RAW)
 
-	# 1. Verificar raw exacto
-	if normalizar_lista_columnas(columnas_actuales) == columnas_raw_normalizadas:
+	# 1. Discriminador rápido RAW: columnas que solo existen en archivos RAW
+	indicadores_norm = {normalizar_texto(c) for c in _INDICADORES_RAW}
+	if indicadores_norm.issubset(columnas_actuales_normalizadas):
 		return 'raw'
 
-	# 2. Verificar cleaned con coincidencia exacta normalizada
+	# 2. Verificar RAW completo: columnas obligatorias RAW como subconjunto
+	columnas_obligatorias_raw_normalizadas = set(normalizar_lista_columnas(COLUMNAS_OBLIGATORIAS_RAW))
+	if columnas_obligatorias_raw_normalizadas.issubset(columnas_actuales_normalizadas):
+		return 'raw'
+
+	# 3. Verificar cleaned con coincidencia exacta normalizada
 	columnas_cleaned_minimas_normalizadas = set(normalizar_lista_columnas(COLUMNAS_MINIMAS_CLEANED))
 	if columnas_cleaned_minimas_normalizadas.issubset(columnas_actuales_normalizadas):
 		return 'cleaned'
 
-	# 3. Intentar resolución vía alias: si tras renombrar con el diccionario de alias
+	# 4. Intentar resolución vía alias: si tras renombrar con el diccionario de alias
 	#    las columnas mínimas quedan cubiertas, es cleaned.
 	mapa_alias = _construir_mapa_alias_normalizado()
 	columnas_resueltas = set()
