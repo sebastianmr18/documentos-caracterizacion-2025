@@ -57,7 +57,8 @@ def preparar_dataframe_categorico(
 	max_categorias: int = 10,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 	multiple_respuesta: bool = False,
-	separador: str = ','
+	separador: str = ',',
+	ordenar_por_nombre: bool = False
 ) -> tuple[pd.DataFrame, list[str]]:
 	df_plot = df.copy()
 	
@@ -76,9 +77,20 @@ def preparar_dataframe_categorico(
 		.replace('', valor_relleno_categorico)
 	)
 	
-	# Determinar el top de categorías excluyendo "Sin dato" si se puede, para ordenarlo bien.
-	counts = df_plot[columna].value_counts()
-	top_categorias = counts.head(max_categorias).index.tolist()
+	# Determinar el top de categorías.
+	if ordenar_por_nombre:
+		# Ordenar alfabéticamente/numéricamente
+		top_categorias = sorted(df_plot[columna].unique().tolist())
+		# Asegurar que el valor de relleno quede al final
+		if valor_relleno_categorico in top_categorias:
+			top_categorias.remove(valor_relleno_categorico)
+			top_categorias.append(valor_relleno_categorico)
+		# Limitar a max_categorias si es necesario
+		top_categorias = top_categorias[:max_categorias]
+	else:
+		# Ordenar por frecuencia (comportamiento original)
+		counts = df_plot[columna].value_counts()
+		top_categorias = counts.head(max_categorias).index.tolist()
 	
 	df_plot = df_plot[df_plot[columna].isin(top_categorias)]
 	return df_plot, top_categorias
@@ -92,11 +104,12 @@ def generar_grafica_barras(
 	max_categorias: int = 10,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 	orientacion: str = 'h',
-	multiple_respuesta: bool = False
+	multiple_respuesta: bool = False,
+	ordenar_por_nombre: bool = False
 ) -> Path:
 	configurar_estilo()
 	df_plot, orden = preparar_dataframe_categorico(
-		df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta
+		df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta, ordenar_por_nombre=ordenar_por_nombre
 	)
 
 	figura, eje = plt.subplots()
@@ -320,7 +333,9 @@ def generar_graficas_combinadas(
 				tit = cfg[2]
 				ori = cfg[4]
 				if col in df_cleaned.columns:
-					rutas_generadas.append(generar_grafica_barras(df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, ori, False))
+					# El estrato se ordena por nombre (numérico 1, 2, 3...)
+					orden_nombre = (clave == 'estrato')
+					rutas_generadas.append(generar_grafica_barras(df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, ori, False, ordenar_por_nombre=orden_nombre))
 			elif tipo == 'bar_multiple':
 				col = cfg[1]
 				tit = cfg[2]
@@ -340,11 +355,12 @@ def generar_grafica_separada_barras(
 	ruta_salida: str | Path,
 	max_categorias: int = 10,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
-	multiple_respuesta: bool = False
+	multiple_respuesta: bool = False,
+	ordenar_por_nombre: bool = False
 ) -> Path:
 	configurar_estilo()
 	df_plot, orden = preparar_dataframe_categorico(
-		df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta
+		df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta, ordenar_por_nombre=ordenar_por_nombre
 	)
 
 	multianual = 'Año de análisis' in df_plot.columns and df_plot['Año de análisis'].nunique() > 1
@@ -431,7 +447,7 @@ def generar_graficas_separadas(
 			if col in df_cleaned.columns:
 				rutas_generadas.append(
 					generar_grafica_separada_barras(
-						df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, multi
+						df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, multi, False
 					)
 				)
 		except Exception as e:
