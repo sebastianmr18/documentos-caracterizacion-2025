@@ -21,3 +21,9 @@ output/
 notebooks/
 
 docs/
+
+data/
+
+*.xls
+
+*.xlsx
