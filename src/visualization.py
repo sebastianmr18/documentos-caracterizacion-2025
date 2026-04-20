@@ -54,7 +54,7 @@ def obtener_paleta_colores(df_plot: pd.DataFrame, multianual: bool) -> dict | st
 def preparar_dataframe_categorico(
 	df: pd.DataFrame,
 	columna: str,
-	max_categorias: int = 10,
+	max_categorias: int = 20,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 	multiple_respuesta: bool = False,
 	separador: str = ',',
@@ -101,7 +101,7 @@ def generar_grafica_barras(
 	columna: str,
 	titulo: str,
 	ruta_salida: str | Path,
-	max_categorias: int = 10,
+	max_categorias: int = 20,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 	orientacion: str = 'h',
 	multiple_respuesta: bool = False,
@@ -284,7 +284,7 @@ def generar_graficas_combinadas(
 	resumen_calidad: pd.DataFrame,
 	carpeta_salida: str | Path,
 	graficas_activas: list[str] | None = None,
-	max_categorias: int = 10,
+	max_categorias: int = 20,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 ) -> list[Path]:
 	carpeta_destino = Path(carpeta_salida)
@@ -353,7 +353,7 @@ def generar_grafica_separada_barras(
 	columna: str,
 	titulo: str,
 	ruta_salida: str | Path,
-	max_categorias: int = 10,
+	max_categorias: int = 20,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 	multiple_respuesta: bool = False,
 	ordenar_por_nombre: bool = False
@@ -416,7 +416,7 @@ def generar_graficas_separadas(
 	df_cleaned: pd.DataFrame,
 	carpeta_salida: str | Path,
 	graficas_activas: list[str] | None = None,
-	max_categorias: int = 10,
+	max_categorias: int = 20,
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 ) -> list[Path]:
 	carpeta_destino = Path(carpeta_salida)
@@ -427,6 +427,7 @@ def generar_graficas_separadas(
 		'depto_nacimiento': ('Departamento de nacimiento', 'Top Departamentos de Nacimiento', '16_depto_nacimiento.png', False),
 		'ciudad_nacimiento': ('Ciudad, municipio o corregimiento de nacimiento', 'Top Ciudades de Nacimiento', '17_ciudad_nacimiento.png', False),
 		'ciudad_residencia': ('Ciudad, municipio o corregimiento de residencia', 'Top Ciudades de Residencia', '18_ciudad_residencia.png', False),
+		'barrio_residencia': ('Barrio de residencia', 'Top Barrios de Residencia', '24_barrio_residencia.png', False),
 		'impedimento_di': ('Impedimento cambio D.I', 'Impedimentos para cambio legal de D.I', '19_impedimento_di.png', False),
 		'sede_universidad': ('Sede de la Universidad del Valle', 'Sede de la Universidad', '20_sede_universidad.png', False),
 		'programa_academico': ('Nombre del programa académico', 'Top Programas Académicos', '21_programa_academico.png', False),

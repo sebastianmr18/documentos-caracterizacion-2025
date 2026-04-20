@@ -288,6 +288,7 @@ GRAFICAS_SEPARADAS = [
 	'depto_nacimiento',
 	'ciudad_nacimiento',
 	'ciudad_residencia',
+	'barrio_residencia',
 	'impedimento_di',
 	'sede_universidad',
 	'programa_academico',
