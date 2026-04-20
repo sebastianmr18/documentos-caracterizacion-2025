@@ -27,3 +27,7 @@ data/
 *.xls
 
 *.xlsx
+
+automatizacion_graficas_caracterizacion.py
+
+automatizacion_graficas_caracterizacion.ipynb

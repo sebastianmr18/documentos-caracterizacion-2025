@@ -297,6 +297,201 @@ GRAFICAS_SEPARADAS = [
 
 TitleCallback = Callable[[str], None]
 
+# ---------------------------------------------------------------------------
+# Capa de normalización de valores categóricos
+# ---------------------------------------------------------------------------
+
+# Columnas cuyos VALORES serán normalizados semánticamente.
+COLUMNAS_VALORES_A_NORMALIZAR: list[str] = [
+	'Identidad étnica',
+	'Grupo poblacional',
+	'Identidad de género',
+	'Expresión de género',
+	'Orientación sexual',
+	'Estamento',
+	'Departamento de nacimiento',
+	'Ciudad, municipio o corregimiento de nacimiento',
+	'Ciudad, municipio o corregimiento de residencia',
+]
+
+# Mapa semántico: { columna_cleaned: { valor_canonico: [variante1, ...] } }
+# Las variantes se comparan normalizadas (sin tildes, minúsculas, sin espacios
+# extra) mediante normalizar_texto(). El valor canónico se escribe tal cual.
+MAPA_NORMALIZACION_SEMANTICA: dict[str, dict[str, list[str]]] = {
+	# --- Identidad étnica ---
+	'Identidad étnica': {
+		'Indígena': ['indígena', 'indigena'],
+		'Mestizo/a/e': ['mestizo/a/e', 'mestiza', 'mestizo'],
+		'NARP (Negro/a/e, Afrodescendiente, Raizal, Palenquero/a/e)': [
+			'narp (negro/a/e, afrodescendiente, raizal, palenquero/a/e)',
+			'narp',
+		],
+		'Ningún grupo étnico': [
+			'ningún grupo étnico',
+			'ningun grupo etnico',
+			'sin pertenencia étnica',
+			'sin pertenencia etnica',
+			'ninguna',
+			'ninguno',
+		],
+	},
+	# --- Grupo poblacional ---
+	'Grupo poblacional': {
+		'Afrodescendiente o negro/a/e': ['afrodescendiente o negro/a/e'],
+		'Campesino/a/e': ['campesino/a/e'],
+		'Indígena': ['indígena', 'indigena'],
+		'LGBTIQ+': ['lgbtiq+', 'lgtbiq+', 'lgbtq+', 'lgtb'],
+		'Migrante': ['migrante'],
+		'No aplica': ['no aplica', 'no aplica,', 'ninguno', 'ninguna'],
+		'Personas con capacidad diversa o "discapacidad"': [
+			'personas con capacidad diversa o "discapacidad"',
+			'personas con capacidad diversa o discapacidad',
+			'discapacidad',
+		],
+		'Víctima del conflicto armado': [
+			'víctima del conflicto armado',
+			'victima del conflicto armado',
+		],
+	},
+	# --- Identidad de género ---
+	'Identidad de género': {
+		'Bigénero': ['bigenero', 'bigénero'],
+		'Hombre Trans': [
+			'hombre trans (persona trans que se identifica como hombre)',
+			'hombre trans',
+		],
+		'Hombre Cisgénero': [
+			'hombre cisgénero',
+			'hombre cisgenero',
+			'hombre cisgenero (persona que se identifica con su genero masculino asignado al nacer)',
+			'hombre cisgenero (persona se que identifica con su genero masculino asignado al nacer)',
+		],
+		'Mujer Trans': [
+			'mujer trans (persona trans que se identifica como mujer)',
+			'mujer trans',
+		],
+		'Mujer Cisgénero': [
+			'mujer cisgenero',
+			'mujer cisgénero',
+			'mujer cisgenero (persona que se identifica con su genero femenino asignado al nacer)',
+			'mujer cisgenero (persona se que identifica con su genero femenino asignado al nacer)',
+			'mujer',
+		],
+		'No binario/a/e / queer / género fluido': [
+			'no binario/a/e /queer/genero fluido',
+			'no binario/a/e / queer / genero fluido',
+			'no binario/a/e /queer/género fluido',
+			'no binari',
+		],
+		'Transfemenina': [
+			'transfemenina (persona trans que se indentifica con las feminidades)',
+			'transfemenina',
+		],
+		'Transmasculina': [
+			'tranmasculina (persona trans que se indentifica con las masculinidades)',
+			'transmasculina',
+			'tranmasculina',
+		],
+		'Prefiero no mencionarlo': ['prefiero no mencionarlo', 'prefiero no decirlo'],
+	},
+	# --- Expresión de género ---
+	'Expresión de género': {
+		'Femenina/o/e': ['femenina/o/e', 'femenina'],
+		'Masculina/o/e': [
+			'masculina/o/e',
+			'masculina',
+			'masculino',
+			#'masculino y femenino',
+			#'a veces femenina, a veces masculina',
+		],
+		'No binario/a/e / queer / género fluido': [
+			'no binario/a/e/ queer/ genero fluido',
+			'no binaria/ queer/ genero fluido',
+			'no binaria/queer',
+			'no binaria',
+			'masculino y femenino', # TODO: Revisar si es correcto que vay aquí
+			'a veces femenina, a veces masculina',
+		],
+		'Prefiero no mencionarlo': ['prefiero no mencionarlo'],
+	},
+	# --- Orientación sexual ---
+	'Orientación sexual': {
+		'Androsexual': ['androsexual'],
+		'Bisexual': [
+			'bisexual (persona que se siente atraida por hombres y mujeres)',
+			'bisexual',
+		],
+		'Gay': [
+			'gay (hombre que se siente atraido por otro hombre)',
+			'gay',
+		],
+		'Heterosexual': [
+			'heterosexual (mujer u hombre que se siente atraida/o por personas del genero o el sexo opuesto)',
+			'heterosexual',
+		],
+		'Lesbiana': [
+			'lesbiana (mujer que se siente atraida por otra mujer)',
+			'lesbiana',
+		],
+		'Pansexual': [
+			'pansexual (persona que se siente atraida por otras personas sin ninguna categorizacion)',
+			'pansexual',
+		],
+		'Queer': ['queer (no categorizo mi orientacion sexual)', 'queer'],
+		'Prefiero no mencionarlo': ['prefiero no mencionarlo', 'prefiero no decirlo'],
+	},
+	# --- Estamento ---
+	'Estamento': {
+		'Estudiante de pregrado': ['estudiante de pregrado'],
+		'Estudiante de posgrado': ['estudiante de posgrado'],
+		'Monitor/a/e': [
+			'monitor/a/e pregrado',
+			'monitor/a/e',
+			'monitor pregrado',
+			'monitor',
+		],
+		'Administrativo/a/e': ['administrativo/a/e', 'administrativo'],
+		'No aplica': ['no aplica', 'ninguno'],
+	},
+	# --- Departamento de nacimiento ---
+	'Departamento de nacimiento': {
+		'Valle del Cauca': ['valle del cauca', 'valle'],
+		'Bogotá D.C.': ['bogota', 'bogotá'],
+		'Nariño': ['narino', 'nariño', 'ñariño'],
+		'Cauca': ['cauca'],
+		'Cundinamarca': ['cundinamarca'],
+		'Boyacá': ['boyaca', 'boyacá'],
+		'Atlántico': ['atlantico', 'atlántico'],
+		'Bolívar': ['bolivar', 'bolívar'],
+		'Antioquia': ['antioquia'],
+		'Huila': ['huila'],
+		'Putumayo': ['putumayo'],
+		'Norte de Santander': ['norte de santander'],
+		'Tolima': ['tolima'],
+		'Risaralda': ['risaralda'],
+	},
+	# --- Ciudad de nacimiento ---
+	'Ciudad, municipio o corregimiento de nacimiento': {
+		'Cali': ['cali', 'cali, valle del cauca'],
+		'Tuluá': ['tulua', 'tulúa', 'tuluá', 'tulúa, valle del cauca', 'tuluá, valle del cauca'],
+		'Palmira': ['palmira', 'palmira, valle del cauca'],
+		'Popayán': ['popayan', 'popayán', 'popayán, cauca', 'propayan cauca'],
+		'Ipiales': ['ipiales', 'ipiales, nariño', 'ipiales, narino'],
+		'Pasto': ['pasto', 'pasto, nariño', 'pasto, narino'],
+		'Barranquilla': ['barranquilla', 'barranquilla, atlántico', 'barranquilla, atlantico'],
+		'Bogotá': ['bogota', 'bogotá', 'bogota, cundinamarca'],
+		'Miranda': ['miranda', 'miranda, cauca'],
+	},
+	# --- Ciudad de residencia ---
+	'Ciudad, municipio o corregimiento de residencia': {
+		'Cali': ['cali', 'cali, valle del cauca'],
+		'Tuluá': ['tulua', 'tuluá', 'tulua, valle del cauca', 'tuluá, valle del cauca'],
+		'Jamundí': ['jamundi', 'jamundí'],
+		'Guacarí': ['guacari', 'guacarí'],
+		'Florida': ['florida', 'florida valle'],
+	},
+}
+
 
 class ErrorValidacionExcel(Exception):
 	"""Error controlado para mostrar mensajes claros al usuario."""
@@ -309,6 +504,107 @@ def _emit_title(title_callback: TitleCallback | None, texto: str) -> None:
 
 def lanzar_error_validacion(mensaje: str) -> None:
 	raise ErrorValidacionExcel(mensaje)
+
+
+def _resolver_valor_semantico(
+	valor_normalizado: str,
+	mapping: dict[str, list[str]],
+) -> str | None:
+	"""Busca valor_normalizado en las listas de variantes del mapping.
+
+	Retorna el valor canónico si encuentra coincidencia exacta o de prefijo.
+	Las variantes del mapa también se comparan normalizadas.
+	"""
+	for canonico, variantes in mapping.items():
+		for variante in variantes:
+			variante_norm = normalizar_texto(variante)
+			if valor_normalizado == variante_norm:
+				return canonico
+			# Coincidencia de prefijo: útil para respuestas multi-opción
+			# como "Bisexual, Queer (no categorizo...)"
+			if valor_normalizado.startswith(variante_norm):
+				return canonico
+	return None
+
+
+def normalizar_valores_categoricos(
+	df: pd.DataFrame,
+	columnas: list[str] | None = None,
+	mapa: dict[str, dict[str, list[str]]] | None = None,
+	valor_desconocido: str | None = None,
+	title_callback: TitleCallback | None = None,
+) -> pd.DataFrame:
+	"""Normaliza semánticamente los valores categóricos de las columnas indicadas.
+
+	Proceso por celda:
+	1. Limpieza básica: strip + normalizar_texto (sin tildes, minúsculas).
+	2. Búsqueda en el mapa semántico → valor canónico.
+	3. Si no hay coincidencia:
+	   - Conserva el valor con limpieza básica (default).
+	   - O sustituye por valor_desconocido si se indica uno.
+
+	Los NaN / vacíos se dejan intactos para que limpiar_texto_categorico
+	los gestione después con VALOR_RELLENO_CATEGORICO.
+
+	Args:
+		df: DataFrame a normalizar (se opera sobre una copia).
+		columnas: Columnas a procesar. Default: COLUMNAS_VALORES_A_NORMALIZAR.
+		mapa: Mapa semántico. Default: MAPA_NORMALIZACION_SEMANTICA.
+		valor_desconocido: Texto de reemplazo para valores no reconocidos.
+		                    Si es None se conserva el valor original limpio.
+		title_callback: Función para imprimir títulos en la UI.
+
+	Returns:
+		Copia del DataFrame con las columnas normalizadas.
+	"""
+	if columnas is None:
+		columnas = COLUMNAS_VALORES_A_NORMALIZAR
+	if mapa is None:
+		mapa = MAPA_NORMALIZACION_SEMANTICA
+
+	df_out = df.copy()
+	desconocidos_por_columna: dict[str, set[str]] = {}
+
+	for columna in columnas:
+		if columna not in df_out.columns:
+			continue
+
+		mapping_col = mapa.get(columna, {})
+		desconocidos: set[str] = set()
+
+		def _resolver_celda(valor: object, _mapping: dict[str, list[str]] = mapping_col, _desc: set[str] = desconocidos) -> object:
+			if pd.isna(valor):
+				return valor
+			texto = str(valor).strip()
+			if not texto:
+				return valor
+			valor_norm = normalizar_texto(texto)
+			if _mapping:
+				canonico = _resolver_valor_semantico(valor_norm, _mapping)
+				if canonico is not None:
+					return canonico
+				_desc.add(texto)
+				return valor_desconocido if valor_desconocido is not None else texto
+			# Sin mapa → solo limpieza básica
+			return texto
+
+		df_out[columna] = df_out[columna].apply(_resolver_celda)
+
+		if desconocidos:
+			desconocidos_por_columna[columna] = desconocidos
+
+	if desconocidos_por_columna:
+		_emit_title(title_callback, 'Valores no reconocidos en normalización semántica')
+		print(
+			'Advertencia: los siguientes valores no estaban en el mapa de normalización '
+			'y se conservaron tal cual (revisar si deben agregarse al mapa):'
+		)
+		for col, vals in desconocidos_por_columna.items():
+			print(f'  [{col}]')
+			for v in sorted(vals):
+				print(f"    - '{v}'")
+
+	return df_out
 
 
 def normalizar_texto(texto: object) -> str:
@@ -777,6 +1073,12 @@ def construir_dataframe_cleaned(
 
 	if 'Año de análisis' not in df_cleaned.columns:
 		df_cleaned['Año de análisis'] = año_calculado
+
+	# --- Normalización semántica de valores categóricos ---
+	df_cleaned = normalizar_valores_categoricos(
+		df_cleaned,
+		title_callback=title_callback,
+	)
 
 	df_cleaned = df_cleaned[COLUMNAS_FINAL_CLEANED].copy()
 
