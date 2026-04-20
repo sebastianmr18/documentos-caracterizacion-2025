@@ -63,10 +63,13 @@ def preparar_dataframe_categorico(
 	df_plot = df.copy()
 	
 	if multiple_respuesta:
+		import re
 		# Expandimos filas si la columna tiene valores como "a, b, c"
 		df_plot[columna] = df_plot[columna].fillna(valor_relleno_categorico).astype(str)
-		# Dividimos por separador y expandimos a múltiples filas
-		df_plot[columna] = df_plot[columna].str.split(separador)
+		# Dividimos por separador (evitando separadores dentro de paréntesis) y expandimos a múltiples filas
+		sep_escaped = re.escape(separador)
+		patron = rf'\s*{sep_escaped}\s*(?![^()]*\))'
+		df_plot[columna] = df_plot[columna].str.split(patron, regex=True)
 		df_plot = df_plot.explode(columna)
 		
 	df_plot[columna] = (
@@ -357,59 +360,74 @@ def generar_grafica_separada_barras(
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 	multiple_respuesta: bool = False,
 	ordenar_por_nombre: bool = False
-) -> Path:
+) -> list[Path]:
 	configurar_estilo()
-	df_plot, orden = preparar_dataframe_categorico(
+	rutas_salida = []
+	df_plot_global, _ = preparar_dataframe_categorico(
 		df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta, ordenar_por_nombre=ordenar_por_nombre
 	)
 
-	multianual = 'Año de análisis' in df_plot.columns and df_plot['Año de análisis'].nunique() > 1
+	multianual = 'Año de análisis' in df_plot_global.columns and df_plot_global['Año de análisis'].nunique() > 1
 
 	if multianual:
-		# Asignar un solo color sólido por año iterando catplot
-		paleta = obtener_paleta_colores(df_plot, multianual)
-		# Convertir diccionario a lista en orden de los años si es necesario, 
-		# pero hue='Año de análisis' lo hace auto. En un facetado sin hue, podemos usar kwargs.
-		g = sns.catplot(
-			data=df_plot,
-			y=columna,
-			col='Año de análisis',
-			kind='count',
-			order=orden,
-			col_wrap=2,
-			height=4.5,
-			aspect=1.2,
-			color=COLOR_SECUNDARIO,
-			sharex=False
-		)
-		g.set_titles("Año: {col_name}")
-		g.set_axis_labels("Cantidad de registros", "")
-		g.fig.suptitle(titulo, y=1.05)
+		anios = sorted(df_plot_global['Año de análisis'].unique())
+		paleta = obtener_paleta_colores(df_plot_global, multianual)
 		
-		for ax in g.axes.flat:
-			for container in ax.containers:
-				ax.bar_label(container, padding=3, fmt='%.0f', fontsize=8)
-				
-		figura = g.fig
+		for anio in anios:
+			df_anio = df[df['Año de análisis'] == anio].copy()
+			df_plot, orden = preparar_dataframe_categorico(
+				df_anio, columna, max_categorias, valor_relleno_categorico, multiple_respuesta, ordenar_por_nombre=ordenar_por_nombre
+			)
+			
+			figura, eje = plt.subplots(figsize=(8, 5))
+			if df_plot.empty:
+				eje.text(0.5, 0.5, 'Sin datos', ha='center', va='center')
+			else:
+				sns.countplot(
+					data=df_plot,
+					y=columna,
+					order=orden,
+					ax=eje,
+					color=paleta.get(anio, COLOR_SECUNDARIO)
+				)
+				for container in eje.containers:
+					eje.bar_label(container, padding=3, fmt='%.0f', fontsize=9)
+					
+			eje.set_title(f"{titulo} - {anio}")
+			eje.set_xlabel('Cantidad de registros')
+			eje.set_ylabel('')
+			figura.tight_layout()
+			
+			ruta_base = Path(ruta_salida)
+			ruta_año = ruta_base.parent / f"{ruta_base.stem}_{anio}{ruta_base.suffix}"
+			guardar_figura(figura, ruta_año)
+			rutas_salida.append(ruta_año)
 	else:
-		figura, eje = plt.subplots(figsize=(8, 5))
-		sns.countplot(
-			data=df_plot,
-			y=columna,
-			order=orden,
-			ax=eje,
-			color=COLOR_PRINCIPAL
+		df_plot, orden = preparar_dataframe_categorico(
+			df, columna, max_categorias, valor_relleno_categorico, multiple_respuesta, ordenar_por_nombre=ordenar_por_nombre
 		)
+		figura, eje = plt.subplots(figsize=(8, 5))
+		if df_plot.empty:
+			eje.text(0.5, 0.5, 'Sin datos', ha='center', va='center')
+		else:
+			sns.countplot(
+				data=df_plot,
+				y=columna,
+				order=orden,
+				ax=eje,
+				color=COLOR_PRINCIPAL
+			)
+			for container in eje.containers:
+				eje.bar_label(container, padding=3, fmt='%.0f', fontsize=9)
 		eje.set_title(titulo)
 		eje.set_xlabel('Cantidad de registros')
 		eje.set_ylabel('')
-		for container in eje.containers:
-			eje.bar_label(container, padding=3, fmt='%.0f', fontsize=9)
 		figura.tight_layout()
+		ruta_destino = Path(ruta_salida)
+		guardar_figura(figura, ruta_destino)
+		rutas_salida.append(ruta_destino)
 
-	ruta_destino = Path(ruta_salida)
-	guardar_figura(figura, ruta_destino)
-	return ruta_destino
+	return rutas_salida
 
 
 def generar_graficas_separadas(
@@ -446,7 +464,7 @@ def generar_graficas_separadas(
 		
 		try:
 			if col in df_cleaned.columns:
-				rutas_generadas.append(
+				rutas_generadas.extend(
 					generar_grafica_separada_barras(
 						df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, multi, False
 					)
