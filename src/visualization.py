@@ -77,13 +77,20 @@ def preparar_dataframe_categorico(
 		.fillna(valor_relleno_categorico)
 		.astype(str)
 		.str.strip()
+		.str.replace(r'\.0$', '', regex=True)
 		.replace('', valor_relleno_categorico)
 	)
 	
 	# Determinar el top de categorías.
 	if ordenar_por_nombre:
-		# Ordenar alfabéticamente/numéricamente
-		top_categorias = sorted(df_plot[columna].unique().tolist())
+		def sort_key(x):
+			try:
+				return (0, float(x))
+			except ValueError:
+				return (1, x)
+
+		# Ordenar alfabéticamente/numéricamente de forma inteligente
+		top_categorias = sorted(df_plot[columna].unique().tolist(), key=sort_key)
 		# Asegurar que el valor de relleno quede al final
 		if valor_relleno_categorico in top_categorias:
 			top_categorias.remove(valor_relleno_categorico)
@@ -183,29 +190,50 @@ def generar_grafica_kde_edades(
 	paleta = obtener_paleta_colores(df_plot, multianual)
 
 	if multianual:
+		# Calcular medias por año para la leyenda
+		medias = df_plot.groupby('Año de análisis')['Edad'].mean()
+		anios_originales = sorted(medias.index.tolist())
+		
+		# Crear el mapeo de nombres y el orden explícito de la leyenda
+		mapa_nombres = {
+			anio: f"{anio} (Media de edad={medias[anio]:.1f})" 
+			for anio in anios_originales
+		}
+		hue_order = [mapa_nombres[a] for a in anios_originales]
+		
+		# Aplicamos el mapeo al dataframe
+		df_plot['Año de análisis'] = df_plot['Año de análisis'].map(mapa_nombres)
+		
+		# Regeneramos paleta con los nuevos nombres para mantener consistencia de colores
+		paleta_con_media = obtener_paleta_colores(df_plot, multianual)
+
 		sns.kdeplot(
 			data=df_plot,
 			x='Edad',
 			hue='Año de análisis',
+			hue_order=hue_order,
 			fill=True,
 			common_norm=False,
 			alpha=0.4,
 			linewidth=2,
-			palette=paleta,
+			palette=paleta_con_media,
 			ax=eje
 		)
 		eje.set_title('Distribución de densidad de Edades (Comparativo multianual)')
 		sns.move_legend(eje, "upper right")
 	else:
+		media_total = df_plot['Edad'].mean()
 		sns.kdeplot(
 			data=df_plot,
 			x='Edad',
 			fill=True,
 			color=COLOR_PRINCIPAL,
 			alpha=0.6,
-			ax=eje
+			ax=eje,
+			label=f'Población (μ={media_total:.1f})'
 		)
 		eje.set_title('Distribución de Edades')
+		eje.legend()
 
 	eje.set_xlabel('Edad')
 	eje.set_ylabel('Densidad')
@@ -215,47 +243,7 @@ def generar_grafica_kde_edades(
 	return ruta_destino
 
 
-def generar_boxplot_semestre(
-	df: pd.DataFrame,
-	ruta_salida: str | Path
-) -> Path:
-	configurar_estilo()
-	figura, eje = plt.subplots(figsize=(8, 6))
 
-	df_plot = df.dropna(subset=['Semestre académico']).copy()
-	df_plot['Semestre académico'] = pd.to_numeric(df_plot['Semestre académico'], errors='coerce')
-	df_plot = df_plot.dropna(subset=['Semestre académico'])
-
-	multianual = 'Año de análisis' in df.columns and df['Año de análisis'].nunique() > 1
-	paleta = obtener_paleta_colores(df_plot, multianual)
-
-	if df_plot.empty:
-		eje.text(0.5, 0.5, 'Sin datos o semestre invalido', ha='center')
-	elif multianual:
-		sns.boxplot(
-			data=df_plot,
-			x='Año de análisis',
-			y='Semestre académico',
-			palette=paleta,
-			ax=eje,
-			width=0.5
-		)
-		eje.set_title('Variación del Semestre Académico cursado por año')
-	else:
-		sns.boxplot(
-			data=df_plot,
-			y='Semestre académico',
-			color=COLOR_PRINCIPAL,
-			ax=eje,
-			width=0.3
-		)
-		eje.set_title('Distribución de Semestre Académico')
-
-	eje.set_ylabel('Semestre')
-	figura.tight_layout()
-	ruta_destino = Path(ruta_salida)
-	guardar_figura(figura, ruta_destino)
-	return ruta_destino
 
 
 def generar_tabla_resumen_como_imagen(
@@ -308,7 +296,7 @@ def generar_graficas_combinadas(
 		'cambio_di': ('bar', 'Cambio de nombre/sexo en D.I', 'Realizaron cambio legal en D.I', '09_cambio_di.png', 'v'),
 		'asesoria_di': ('bar', 'Asesoría cambio D.I', 'Interés en recibir asesoría para D.I', '10_asesoria_di.png', 'v'),
 		'estamento': ('bar', 'Estamento', 'Distribución por Estamento', '11_estamento.png', 'h'),
-		'semestre': ('boxplot', '', '', '12_semestre_academico.png'),
+		'semestre': ('bar', 'Semestre académico', 'Distribución por Semestre Académico', '12_semestre_academico.png', 'v'),
 		'ocupacion': ('bar', '¿Cuál es tu ocupación actual?', 'Ocupación principal actual', '13_ocupacion.png', 'h'),
 		'acompanamiento': ('bar_multiple', '¿En los últimos 3 meses has recibido alguno de los siguientes tipos de acompañamiento/orientación de acuerdo con tu situación, experiencia o proceso personal en otro espacio, colectivo, organización privada o servicio de salud?', 'Tipos de acompañamiento recibido', '14_acompanamiento.png', 'h'),
 		'enteraste': ('bar_multiple', 'Como te enteraste de Campus Diverso', 'Tasa de difusión de Campus Diverso', '15_enteraste.png', 'h'),
@@ -332,15 +320,13 @@ def generar_graficas_combinadas(
 		try:
 			if tipo == 'kde':
 				rutas_generadas.append(generar_grafica_kde_edades(df_cleaned, ruta_archivo))
-			elif tipo == 'boxplot':
-				rutas_generadas.append(generar_boxplot_semestre(df_cleaned, ruta_archivo))
 			elif tipo == 'bar':
 				col = cfg[1]
 				tit = cfg[2]
 				ori = cfg[4]
 				if col in df_cleaned.columns:
-					# El estrato se ordena por nombre (numérico 1, 2, 3...)
-					orden_nombre = (clave == 'estrato')
+					# Estrato y semestre se ordenan por valor numérico implícito
+					orden_nombre = (clave in ['estrato', 'semestre'])
 					rutas_generadas.append(generar_grafica_barras(df_cleaned, col, tit, ruta_archivo, max_categorias, valor_relleno_categorico, ori, False, ordenar_por_nombre=orden_nombre))
 			elif tipo == 'bar_multiple':
 				col = cfg[1]
