@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import warnings
+import textwrap
 from pathlib import Path
 from typing import Final
 
@@ -80,6 +81,14 @@ def preparar_dataframe_categorico(
 		.str.replace(r'\.0$', '', regex=True)
 		.replace('', valor_relleno_categorico)
 	)
+
+	# Función para envolver texto largo sin perder información
+	def _envolver_texto(t):
+		if t == valor_relleno_categorico:
+			return t
+		return "\n".join(textwrap.wrap(str(t), width=80))
+
+	df_plot[columna] = df_plot[columna].apply(_envolver_texto)
 	
 	# Determinar el top de categorías.
 	if ordenar_por_nombre:
