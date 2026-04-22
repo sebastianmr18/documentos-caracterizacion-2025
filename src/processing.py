@@ -281,7 +281,10 @@ GRAFICAS_COMBINADAS = [
 	'semestre',
 	'ocupacion',
 	'acompanamiento',
-	'enteraste'
+	'enteraste',
+	'entidad_acompanamiento',
+	'profesional_acompanante',
+	'origen_recursos'
 ]
 
 GRAFICAS_SEPARADAS = [

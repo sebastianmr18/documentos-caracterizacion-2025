@@ -311,7 +311,10 @@ def generar_graficas_combinadas(
 		'semestre': ('boxplot', '', '', '12_semestre_academico.png'),
 		'ocupacion': ('bar', '¿Cuál es tu ocupación actual?', 'Ocupación principal actual', '13_ocupacion.png', 'h'),
 		'acompanamiento': ('bar_multiple', '¿En los últimos 3 meses has recibido alguno de los siguientes tipos de acompañamiento/orientación de acuerdo con tu situación, experiencia o proceso personal en otro espacio, colectivo, organización privada o servicio de salud?', 'Tipos de acompañamiento recibido', '14_acompanamiento.png', 'h'),
-		'enteraste': ('bar_multiple', 'Como te enteraste de Campus Diverso', 'Tasa de difusión de Campus Diverso', '15_enteraste.png', 'h')
+		'enteraste': ('bar_multiple', 'Como te enteraste de Campus Diverso', 'Tasa de difusión de Campus Diverso', '15_enteraste.png', 'h'),
+		'entidad_acompanamiento': ('bar', 'Entidad acompañamiento', 'Entidad del acompañamiento recibido', '25_entidad_acompanamiento.png', 'h'),
+		'profesional_acompanante': ('bar', 'Profesional acompañante', 'Profesional que brindó el acompañamiento', '26_profesional_acompanante.png', 'h'),
+		'origen_recursos': ('bar', '¿De donde provienen tus ingresos o recursos?', 'Origen de ingresos o recursos', '27_origen_recursos.png', 'h')
 	}
 
 	# Generar tabla
