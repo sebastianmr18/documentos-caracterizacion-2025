@@ -12,9 +12,16 @@ import numpy as np
 
 from .processing import VALOR_RELLENO_CATEGORICO
 
-COLOR_PRINCIPAL: Final[str] = '#E3000F'  # Univalle institucional
-COLOR_SECUNDARIO: Final[str] = '#7aa6c2'
-COLOR_TERCIARIO: Final[str] = '#d0d8df'
+COLOR_PRINCIPAL: Final[str] = '#E3000F'  # Rojo Univalle (Destacado)
+COLOR_SECUNDARIO: Final[str] = '#FBBC04' # Amarillo/Naranja encendido
+COLOR_TERCIARIO: Final[str] = '#9333EA' # Violeta alegre
+COLOR_CUATERNARIO: Final[str] = '#1A73E8'   # Azul eléctrico
+COLOR_QUINARIO: Final[str] = '#34A853'  # Verde vibrante
+
+# Opciones extra (Paletas alternativas):
+# - Pastel: ['#FF9AA2', '#FFB7B2', '#FFDAC1', '#E2F0CB']
+# - Neon:   ['#00F5D4', '#00BBF9', '#F15BB5', '#9B5DE5']
+
 
 
 def configurar_estilo() -> None:
@@ -44,7 +51,7 @@ def obtener_paleta_colores(df_plot: pd.DataFrame, multianual: bool) -> dict | st
 		
 	anios = sorted(df_plot['Año de análisis'].unique().tolist())
 	paleta = {}
-	colores_pasados = ['#bbbbbb', '#888888', '#555555', '#222222']
+	colores_pasados = [COLOR_SECUNDARIO, COLOR_TERCIARIO, COLOR_CUATERNARIO, COLOR_QUINARIO]
 	for idx, anio in enumerate(anios):
 		color = COLOR_PRINCIPAL if anio == anios[-1] else colores_pasados[idx % len(colores_pasados)]
 		paleta[anio] = color
