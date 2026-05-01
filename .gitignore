@@ -31,3 +31,9 @@ data/
 automatizacion_graficas_caracterizacion.py
 
 automatizacion_graficas_caracterizacion.ipynb
+
+*.md
+
+*.gdoc
+
+examples/

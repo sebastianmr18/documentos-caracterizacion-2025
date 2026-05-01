@@ -1,3 +1,10 @@
+"""
+Módulo de Procesamiento de Datos.
+
+Contiene toda la lógica de Negocio (ETL) para la caracterización de datos:
+lectura, homologación de columnas, limpieza, validación de esquemas (raw/cleaned)
+y normalización semántica de respuestas categóricas.
+"""
 from __future__ import annotations
 
 import difflib
@@ -255,11 +262,20 @@ ALIAS_COLUMNAS_CLEANED: dict[str, list[str]] = {
 }
 
 def _obtener_mapeo_raw_a_cleaned() -> dict[str, str]:
+	"""
+	Genera un diccionario inverso (alias -> canonico) a partir de ALIAS_COLUMNAS_CLEANED.
+	Solo incluye alias que existen exactamente en COLUMNAS_EXACTAS_RAW.
+	
+	Retorna:
+		dict[str, str]: Mapeo de columna original raw hacia la columna estandarizada.
+	"""
 	mapeo: dict[str, str] = {}
+	# Itera sobre el mapa semántico de columnas
 	for canonico, aliases in ALIAS_COLUMNAS_CLEANED.items():
 		for alias in aliases:
 			if alias in COLUMNAS_EXACTAS_RAW:
 				mapeo[alias] = canonico
+	# Las columnas que ya tienen el nombre correcto también se agregan
 	for col in COLUMNAS_FINAL_CLEANED:
 		if col in COLUMNAS_EXACTAS_RAW:
 			mapeo[col] = col
@@ -498,15 +514,32 @@ MAPA_NORMALIZACION_SEMANTICA: dict[str, dict[str, list[str]]] = {
 
 
 class ErrorValidacionExcel(Exception):
-	"""Error controlado para mostrar mensajes claros al usuario."""
+	"""
+	Error personalizado y controlado para mostrar mensajes de validación claros al usuario,
+	evitando trazas de error de Python asustadizas en la interfaz.
+	"""
+	pass
 
 
 def _emit_title(title_callback: TitleCallback | None, texto: str) -> None:
+	"""
+	Emite un título visual en la UI si se proporciona una función de callback.
+	
+	Parámetros:
+		title_callback (TitleCallback | None): Función para imprimir títulos.
+		texto (str): Texto a emitir.
+	"""
 	if title_callback is not None:
 		title_callback(texto)
 
 
 def lanzar_error_validacion(mensaje: str) -> None:
+	"""
+	Dispara una excepción ErrorValidacionExcel deteniendo el flujo del programa.
+	
+	Parámetros:
+		mensaje (str): Explicación amigable del error encontrado.
+	"""
 	raise ErrorValidacionExcel(mensaje)
 
 
@@ -514,18 +547,28 @@ def _resolver_valor_semantico(
 	valor_normalizado: str,
 	mapping: dict[str, list[str]],
 ) -> str | None:
-	"""Busca valor_normalizado en las listas de variantes del mapping.
+	"""
+	Busca valor_normalizado en las listas de variantes de un mapa semántico.
 
-	Retorna el valor canónico si encuentra coincidencia exacta o de prefijo.
-	Las variantes del mapa también se comparan normalizadas.
+	El algoritmo comprueba primero igualdad estricta normalizada y luego
+	intenta coincidencia de prefijos (útil para respuestas múltiples como "Gay, ...").
+
+	Parámetros:
+		valor_normalizado (str): String en minúsculas y sin tildes a buscar.
+		mapping (dict): Diccionario de {valor_canonico: [variante1, ...]}.
+
+	Retorna:
+		str | None: El valor canónico oficial si hay match, o None si no se reconoce.
 	"""
 	for canonico, variantes in mapping.items():
 		for variante in variantes:
 			variante_norm = normalizar_texto(variante)
+			
+			# Coincidencia exacta tras limpieza
 			if valor_normalizado == variante_norm:
 				return canonico
-			# Coincidencia de prefijo: útil para respuestas multi-opción
-			# como "Bisexual, Queer (no categorizo...)"
+				
+			# Coincidencia de prefijo (ej: "Bisexual (persona que...)" con "Bisexual, y queer")
 			if valor_normalizado.startswith(variante_norm):
 				return canonico
 	return None
@@ -612,28 +655,54 @@ def normalizar_valores_categoricos(
 
 
 def normalizar_texto(texto: object) -> str:
+	"""
+	Convierte un texto a un formato canónico estandarizado:
+	- Elimina espacios en los bordes
+	- Remueve tildes y diacríticos (ej: á -> a)
+	- Reduce múltiples espacios a uno solo
+	- Convierte a minúsculas
+	
+	Parámetros:
+		texto (object): Cualquier objeto que pueda convertirse a string.
+		
+	Retorna:
+		str: Texto limpio y estandarizado, útil para comparaciones robustas.
+	"""
 	if texto is None:
 		return ''
 	texto_normalizado = str(texto).strip()
+	# Descompone caracteres con tildes (NFD)
 	texto_normalizado = unicodedata.normalize('NFKD', texto_normalizado)
+	# Filtra los caracteres de combinación (las tildes sueltas)
 	texto_normalizado = ''.join(
 		caracter
 		for caracter in texto_normalizado
 		if not unicodedata.combining(caracter)
 	)
+	# Consolida espacios múltiples
 	texto_normalizado = re.sub(r'\s+', ' ', texto_normalizado)
 	return texto_normalizado.lower()
 
 
 def obtener_columnas_df_raw(df: pd.DataFrame) -> list[str]:
+	"""
+	Extrae las columnas de un DataFrame asegurando que sean cadenas de texto.
+	"""
 	return [str(columna) for columna in df.columns.tolist()]
 
 
 def normalizar_lista_columnas(columnas: Sequence[object]) -> list[str]:
+	"""
+	Aplica normalizar_texto a una lista completa de columnas.
+	"""
 	return [normalizar_texto(columna) for columna in columnas]
 
 
 def mostrar_debug_columnas_df_raw(df: pd.DataFrame, titulo: str = 'Debug de columnas detectadas en df_raw', title_callback: TitleCallback | None = None) -> None:
+	"""
+	Imprime por consola la lista numerada de todas las columnas del DataFrame.
+	Útil para diagnosticar archivos con nombres de columnas mal formados.
+	"""
 	columnas_actuales = obtener_columnas_df_raw(df)
 	_emit_title(title_callback, titulo)
 	print(f'Se detectaron {len(columnas_actuales)} columnas en el Excel cargado:')
@@ -642,10 +711,25 @@ def mostrar_debug_columnas_df_raw(df: pd.DataFrame, titulo: str = 'Debug de colu
 
 
 def resumir_diferencias_con_esquema(df: pd.DataFrame, columnas_esperadas: Sequence[str], nombre_esquema: str) -> dict[str, list[str] | str]:
+	"""
+	Compara las columnas de un DataFrame contra un esquema esperado.
+	La comparación es insensible a mayúsculas y tildes (usa nombres normalizados).
+	
+	Parámetros:
+		df (pd.DataFrame): Datos cargados.
+		columnas_esperadas (Sequence[str]): Lista de columnas ideales.
+		nombre_esquema (str): Etiqueta descriptiva del esquema (ej. "raw", "cleaned").
+		
+	Retorna:
+		dict: Resultados de la comparación con faltantes, adicionales y coincidencias.
+	"""
 	columnas_actuales = obtener_columnas_df_raw(df)
+	
+	# Mapeos inversos para poder devolver el nombre original tras comparar la versión limpia
 	mapa_actual = {normalizar_texto(columna): columna for columna in columnas_actuales}
 	mapa_esperado = {normalizar_texto(columna): columna for columna in columnas_esperadas}
 
+	# Operaciones de conjuntos para identificar diferencias
 	faltantes = [
 		mapa_esperado[columna_normalizada]
 		for columna_normalizada in mapa_esperado
@@ -671,6 +755,10 @@ def resumir_diferencias_con_esquema(df: pd.DataFrame, columnas_esperadas: Sequen
 
 
 def mostrar_debug_validacion_tipo_base(df: pd.DataFrame, title_callback: TitleCallback | None = None) -> None:
+	"""
+	Prueba la estructura del DataFrame contra los dos esquemas posibles
+	y muestra un resumen detallado para ayudar en la depuración si falla la carga.
+	"""
 	_emit_title(title_callback, 'Debug de validación del tipo de base')
 
 	for esquema, columnas_esperadas in [
@@ -702,18 +790,24 @@ def mostrar_debug_validacion_tipo_base(df: pd.DataFrame, title_callback: TitleCa
 
 
 def _construir_mapa_alias_normalizado() -> dict[str, str]:
-	"""Construye un mapa {alias_normalizado: canonico} desde ALIAS_COLUMNAS_CLEANED."""
+	"""
+	Construye un mapa `{alias_normalizado: canonico}` desde `ALIAS_COLUMNAS_CLEANED`.
+	Normaliza tanto las claves (aliases) como los valores.
+
+	Retorna:
+		dict[str, str]: Diccionario plano optimizado para consultas O(1).
+	"""
 	mapa: dict[str, str] = {}
 	for canonico, aliases in ALIAS_COLUMNAS_CLEANED.items():
 		for alias in aliases:
 			mapa[normalizar_texto(alias)] = canonico
-		# El propio nombre canónico también es un alias de sí mismo
+		# El propio nombre canónico también es un alias de sí mismo para tolerancia a fallos
 		mapa[normalizar_texto(canonico)] = canonico
 	return mapa
 
 
 # Columnas que SOLO aparecen en archivos RAW y nunca en CLEANED.
-# Su presencia es suficiente para identificar un archivo como RAW.
+# Su presencia es suficiente para identificar un archivo de inmediato como RAW (Forms).
 _INDICADORES_RAW = {
 	'Marca temporal',
 	'Dirección de correo electrónico',
@@ -721,28 +815,34 @@ _INDICADORES_RAW = {
 
 
 def detectar_tipo_base(df: pd.DataFrame) -> str:
-	"""Detecta si el DataFrame es 'raw', 'cleaned' o 'desconocido'.
+	"""
+	Algoritmo heurístico para detectar si el DataFrame cargado es 'raw' (desde Google Forms), 
+	'cleaned' (ya procesado) o 'desconocido'.
 
-	- 'raw': contiene todas las columnas obligatorias RAW (subconjunto) o
-	         al menos los indicadores exclusivos RAW.
-	- 'cleaned': contiene las columnas mínimas CLEANED (con o sin resolución
-	             de aliases).
-	- 'desconocido': no satisface ningún criterio.
+	- 'raw': Contiene todas las columnas obligatorias RAW o al menos los indicadores exclusivos.
+	- 'cleaned': Contiene las columnas mínimas CLEANED.
+	- 'desconocido': No cumple ninguna condición y requiere intervención.
+	
+	Parámetros:
+		df (pd.DataFrame): DataFrame a inspeccionar.
+		
+	Retorna:
+		str: Tipo detectado ('raw', 'cleaned', 'desconocido').
 	"""
 	columnas_actuales = obtener_columnas_df_raw(df)
 	columnas_actuales_normalizadas = set(normalizar_lista_columnas(columnas_actuales))
 
-	# 1. Discriminador rápido RAW: columnas que solo existen en archivos RAW
+	# 1. Discriminador rápido RAW: columnas exclusivas de Google Forms
 	indicadores_norm = {normalizar_texto(c) for c in _INDICADORES_RAW}
 	if indicadores_norm.issubset(columnas_actuales_normalizadas):
 		return 'raw'
 
-	# 2. Verificar RAW completo: columnas obligatorias RAW como subconjunto
+	# 2. Verificar RAW completo (subconjunto obligatorio)
 	columnas_obligatorias_raw_normalizadas = set(normalizar_lista_columnas(COLUMNAS_OBLIGATORIAS_RAW))
 	if columnas_obligatorias_raw_normalizadas.issubset(columnas_actuales_normalizadas):
 		return 'raw'
 
-	# 3. Verificar cleaned con coincidencia exacta normalizada
+	# 3. Verificar cleaned con coincidencia exacta
 	columnas_cleaned_minimas_normalizadas = set(normalizar_lista_columnas(COLUMNAS_MINIMAS_CLEANED))
 	if columnas_cleaned_minimas_normalizadas.issubset(columnas_actuales_normalizadas):
 		return 'cleaned'
@@ -770,10 +870,21 @@ def homologar_columnas(
 	umbral_fuzzy: float = 0.60,
 	title_callback: TitleCallback | None = None,
 ) -> tuple[pd.DataFrame, list[tuple[str, str]], list[str]]:
-	"""Renombra columnas del df al nombre canónico usando tres capas en orden:
-	1. Coincidencia normalizada exacta.
+	"""
+	Renombra columnas del DataFrame original hacia el nombre canónico (limpio).
+	Usa tres capas de precisión en orden de prioridad:
+	1. Coincidencia normalizada exacta (ej. "Estrato" == "estrato").
 	2. Diccionario de alias conocidos (ALIAS_COLUMNAS_CLEANED).
-	3. Fuzzy matching como fallback.
+	3. Fuzzy matching (algoritmo de similitud de cadenas) como fallback.
+
+	Parámetros:
+		df (pd.DataFrame): DataFrame a homologar.
+		columnas_esperadas (Sequence[str]): Las columnas que debería tener.
+		umbral_fuzzy (float): Porcentaje mínimo de coincidencia (0.0 a 1.0) para la capa 3.
+		title_callback (TitleCallback | None): Callback para UI.
+
+	Retorna:
+		tuple: (DataFrame homologado, lista de cambios realizados, lista de columnas ignoradas)
 	"""
 	columnas_actuales = obtener_columnas_df_raw(df)
 
@@ -782,7 +893,7 @@ def homologar_columnas(
 		normalizar_texto(columna): columna for columna in columnas_esperadas
 	}
 
-	# Mapa alias: alias_normalizado -> canónico (solo para columnas que están en columnas_esperadas)
+	# Mapa alias: alias_normalizado -> canónico (solo para columnas de este esquema)
 	mapa_alias_global = _construir_mapa_alias_normalizado()
 	mapa_alias_filtrado: dict[str, str] = {
 		alias_norm: canonico
@@ -803,9 +914,9 @@ def homologar_columnas(
 		if not columna_canonica:
 			columna_canonica = mapa_alias_filtrado.get(columna_normalizada)
 			if columna_canonica and columna_canonica not in columnas_esperadas:
-				columna_canonica = None  # alias no aplica a este esquema
+				columna_canonica = None  # el alias no aplica a este esquema
 
-		# Capa 3: fuzzy matching genérico
+		# Capa 3: fuzzy matching genérico con difflib
 		if not columna_canonica:
 			coincidencias = difflib.get_close_matches(
 				columna_normalizada,
@@ -817,7 +928,8 @@ def homologar_columnas(
 				columna_canonica = columnas_esperadas_normalizadas[coincidencias[0]]
 
 		if columna_canonica:
-			if columna_canonica not in renombres.values():  # Evitar mapear dos col. al mismo target
+			# Evitar mapear dos columnas diferentes al mismo target canónico
+			if columna_canonica not in renombres.values():
 				renombres[columna_actual] = columna_canonica
 			else:
 				columnas_sin_equivalencia.append(columna_actual)
@@ -826,6 +938,7 @@ def homologar_columnas(
 
 	df_homologado = df.rename(columns=renombres).copy()
 
+	# Recopilar listado de modificaciones para el reporte
 	cambios = [
 		(original, nuevo)
 		for original, nuevo in renombres.items()
@@ -842,11 +955,9 @@ def homologar_columnas(
 
 
 def limpiar_columnas_unnamed(df: pd.DataFrame) -> pd.DataFrame:
+	"""Elimina las columnas residuales vacías o generadas automáticamente (ej. 'Unnamed: 60')."""
 	columnas_validas = [col for col in df.columns if not str(col).startswith('Unnamed:')]
 	return df.loc[:, columnas_validas].copy()
-
-
-
 
 
 def validar_esquema_cleaned_minimo(
@@ -854,12 +965,13 @@ def validar_esquema_cleaned_minimo(
 	columnas_minimas: Sequence[str] = COLUMNAS_MINIMAS_CLEANED,
 	columnas_opcionales: Sequence[str] = COLUMNAS_OPCIONALES_CLEANED,
 ) -> None:
-	"""Valida que el DataFrame contenga todas las columnas mínimas obligatorias.
-	Las columnas opcionales generan un aviso si faltan pero NO interrumpen el flujo.
+	"""
+	Valida que el DataFrame contenga todas las columnas mínimas obligatorias para el análisis.
+	Si faltan columnas obligatorias, lanza error. Si faltan opcionales, solo advierte.
 	"""
 	columnas_actuales = set(obtener_columnas_df_raw(df))
 
-	# Columnas mínimas obligatorias
+	# Validar columnas críticas
 	faltantes_obligatorias = [col for col in columnas_minimas if col not in columnas_actuales]
 	if faltantes_obligatorias:
 		mensaje = f"La base de datos es inválida. Faltan {len(faltantes_obligatorias)} columnas obligatorias del esquema CLEANED:"
@@ -869,7 +981,7 @@ def validar_esquema_cleaned_minimo(
 
 	print('Columnas obligatorias: todas presentes ✓')
 
-	# Columnas opcionales: aviso si faltan
+	# Advertir sobre columnas opcionales que se tendrán que rellenar
 	faltantes_opcionales = [col for col in columnas_opcionales if col not in columnas_actuales]
 	if faltantes_opcionales:
 		print(f'Aviso: Las siguientes {len(faltantes_opcionales)} columna(s) opcionales no están en el archivo y se rellenarán con \'Sin dato\'/')
@@ -886,6 +998,7 @@ def validar_esquema_cleaned_minimo(
 
 
 def validar_columnas_obligatorias(df: pd.DataFrame, columnas_obligatorias: Sequence[str] = COLUMNAS_OBLIGATORIAS_RAW) -> None:
+	"""Comprueba existencia estricta de una lista de columnas y aborta si faltan."""
 	columnas_faltantes = [col for col in columnas_obligatorias if col not in df.columns]
 	if columnas_faltantes:
 		faltantes_texto = ', '.join([f"'{col}'" for col in columnas_faltantes])
@@ -895,6 +1008,7 @@ def validar_columnas_obligatorias(df: pd.DataFrame, columnas_obligatorias: Seque
 
 
 def advertir_columnas_adicionales(df: pd.DataFrame, columnas_referencia: Sequence[str]) -> None:
+	"""Avisa por consola de columnas sobrantes sin detener la ejecución."""
 	adicionales = [col for col in df.columns if col not in columnas_referencia]
 	if adicionales:
 		print('Advertencia: se encontraron columnas adicionales que no se usarán directamente:')
@@ -903,6 +1017,10 @@ def advertir_columnas_adicionales(df: pd.DataFrame, columnas_referencia: Sequenc
 
 
 def convertir_a_fecha(serie: pd.Series, nombre_columna: str) -> pd.Series:
+	"""
+	Transforma una serie Pandas a Datetime usando pd.to_datetime, 
+	asumiendo formato europeo (Día/Mes/Año). Reemplaza inválidos por NaT.
+	"""
 	serie_convertida = pd.to_datetime(serie, errors='coerce', dayfirst=True)
 	nulos_generados = int(serie.notna().sum() - serie_convertida.notna().sum())
 	if nulos_generados > 0:
@@ -917,6 +1035,10 @@ def filtrar_registros_por_anio_diligenciamiento(
 	anio_analisis: int,
 	title_callback: TitleCallback | None = None,
 ) -> pd.DataFrame:
+	"""
+	Filtra el DataFrame para retener únicamente las encuestas llenadas en el año indicado.
+	Elimina nulos en fechas y los que pertenecen a otros periodos.
+	"""
 	if 'Fecha de diligenciamiento' not in df.columns:
 		lanzar_error_validacion(
 			"No se encontró la columna 'Fecha de diligenciamiento', necesaria para filtrar el año de análisis."
@@ -933,6 +1055,7 @@ def filtrar_registros_por_anio_diligenciamiento(
 	mascara_anio = df_filtrado['Fecha de diligenciamiento'].dt.year.eq(anio_analisis)
 	registros_fuera_de_anio = int((df_filtrado['Fecha de diligenciamiento'].notna() & ~mascara_anio).sum())
 
+	# Ejecuta el filtro
 	df_filtrado = df_filtrado.loc[mascara_anio.fillna(False)].copy()
 
 	if registros_sin_fecha > 0 or registros_fuera_de_anio > 0:
@@ -952,6 +1075,10 @@ def filtrar_registros_por_anio_diligenciamiento(
 
 
 def calcular_edad_desde_fecha_nacimiento(serie_fechas: pd.Series, anio_referencia: int) -> pd.Series:
+	"""
+	Calcula la edad en años enteros respecto al 31 de diciembre del año de referencia.
+	Usa el factor 365.25 para tener en cuenta años bisiestos.
+	"""
 	fecha_corte = pd.Timestamp(year=anio_referencia, month=12, day=31)
 	edades = ((fecha_corte - serie_fechas).dt.days / 365.25).apply(
 		lambda valor: int(valor) if pd.notna(valor) and valor >= 0 else np.nan
@@ -960,6 +1087,7 @@ def calcular_edad_desde_fecha_nacimiento(serie_fechas: pd.Series, anio_referenci
 
 
 def limpiar_texto_categorico(valor: object, valor_relleno: str = VALOR_RELLENO_CATEGORICO) -> str:
+	"""Limpia textos libres básicos: quita espacios y maneja NaNs usando el valor de relleno."""
 	if pd.isna(valor):
 		return valor_relleno
 	texto = str(valor).strip()
@@ -970,6 +1098,7 @@ def limpiar_texto_categorico(valor: object, valor_relleno: str = VALOR_RELLENO_C
 
 
 def mostrar_resumen_dataframe(df: pd.DataFrame, nombre: str = 'DataFrame') -> None:
+	"""Imprime tamaño y primeras 10 columnas de un df para trazabilidad."""
 	print(f'{nombre}: {df.shape[0]} filas y {df.shape[1]} columnas')
 	print('Primeras columnas detectadas:')
 	for columna in df.columns[:10]:
@@ -978,7 +1107,7 @@ def mostrar_resumen_dataframe(df: pd.DataFrame, nombre: str = 'DataFrame') -> No
 
 def validar_esquema_raw(df_raw: pd.DataFrame, title_callback: TitleCallback | None = None) -> None:
 	"""Valida que el DataFrame RAW contenga todas las columnas obligatorias.
-	No exige orden exacto ni columnas adicionales específicas (como Unnamed:60, Convención).
+	No exige orden exacto ni se queja de columnas extra como Unnamed.
 	"""
 	_emit_title(title_callback, 'Validación del esquema raw')
 	validar_columnas_obligatorias(df_raw, COLUMNAS_OBLIGATORIAS_RAW)
@@ -987,6 +1116,7 @@ def validar_esquema_raw(df_raw: pd.DataFrame, title_callback: TitleCallback | No
 
 
 def validar_esquema_cleaned(df_cleaned: pd.DataFrame, title_callback: TitleCallback | None = None) -> None:
+	"""Verifica la validez de un dataframe que ya ha sido procesado (cleaned)."""
 	_emit_title(title_callback, 'Validación del esquema cleaned')
 	validar_esquema_cleaned_minimo(df_cleaned, COLUMNAS_MINIMAS_CLEANED)
 	print('La estructura del archivo cleaned es válida (contiene las columnas mínimas).')
@@ -999,23 +1129,42 @@ def construir_dataframe_cleaned(
 	valor_relleno_categorico: str = VALOR_RELLENO_CATEGORICO,
 	title_callback: TitleCallback | None = None,
 ) -> pd.DataFrame:
+	"""
+	Función principal de transformación y limpieza (Data Pipeline).
+	Recibe un DataFrame (raw o cleaned), homologa sus columnas, rellena vacíos y
+	calcula derivadas como la Edad, aplicando también el mapa de normalización semántica.
+
+	Parámetros:
+		df_entrada (pd.DataFrame): Datos originales.
+		tipo_base (str): 'raw' o 'cleaned'.
+		anio_analisis (int): Año de referencia a usar por defecto si no se detecta uno en los datos.
+		valor_relleno_categorico (str): Valor por defecto para reemplazar celdas nulas.
+		title_callback: Función para imprimir en UI.
+
+	Retorna:
+		pd.DataFrame: Un DataFrame completamente estandarizado y listo para graficar.
+	"""
 	_emit_title(title_callback, 'Limpieza y transformación')
 
-	# Extraer o determinar 'Año de análisis'
-	# Se da prioridad a la columna "Marca temporal" (si existe) convirtiendo a fecha y usando el primer año válido encontrado.
+	# Lógica para extraer o determinar 'Año de análisis'
+	# Se da prioridad a la columna "Marca temporal" (si existe) convirtiendo a fecha y usando el primer año válido.
 	año_calculado = anio_analisis
 	if 'Marca temporal' in df_entrada.columns:
 		m_temporal = pd.to_datetime(df_entrada['Marca temporal'], errors='coerce', dayfirst=True)
 		años_validos = m_temporal.dt.year.dropna()
 		if not años_validos.empty:
-			año_calculado = int(años_validos.mode().iloc[0]) # Usar el año más frecuente como el calculado para todo el archivo
+			# Usa el año más frecuente (mode) como el calculado para todo el archivo
+			año_calculado = int(años_validos.mode().iloc[0]) 
 
+	# Bifurcación del pipeline: Si ya está "cleaned", el procesamiento es mínimo
 	if tipo_base == 'cleaned':
 		df_cleaned = df_entrada.copy()
+		
 		# Rellenar columnas opcionales ausentes antes de procesar
 		for col_opc in COLUMNAS_OPCIONALES_CLEANED:
 			if col_opc not in df_cleaned.columns:
 				df_cleaned[col_opc] = valor_relleno_categorico
+				
 		# Convertir fecha de nacimiento si existe y no es relleno
 		if 'Fecha de nacimiento' in df_cleaned.columns:
 			df_cleaned['Fecha de nacimiento'] = convertir_a_fecha(
@@ -1023,11 +1172,14 @@ def construir_dataframe_cleaned(
 				'Fecha de nacimiento',
 			)
 		df_cleaned['Edad'] = pd.to_numeric(df_cleaned['Edad'], errors='coerce')
+		
+	# Si es 'raw', aplica todo el pipeline de homologación y limpieza profunda
 	else:
 		df = limpiar_columnas_unnamed(df_entrada.copy())
 
 		mapeo_raw_a_cleaned = _obtener_mapeo_raw_a_cleaned()
-		# Para bases raw, las columnas opcionales del MAPEO también pueden estar ausentes
+		
+		# Validar obligatoriedad basada en el diccionario de mapeo
 		columnas_raw_obligatorias = {
 			col for col in mapeo_raw_a_cleaned
 			if mapeo_raw_a_cleaned[col] not in COLUMNAS_OPCIONALES_CLEANED
@@ -1038,15 +1190,16 @@ def construir_dataframe_cleaned(
 					f"No es posible construir la base limpia porque falta la columna obligatoria '{columna}'."
 				)
 
-		# Construir df_cleaned con las columnas disponibles del mapeo
+		# Filtrar y renombrar (Construir df_cleaned preliminar)
 		columnas_mapeo_disponibles = {k: v for k, v in mapeo_raw_a_cleaned.items() if k in df.columns}
 		df_cleaned = df[list(columnas_mapeo_disponibles.keys())].rename(columns=columnas_mapeo_disponibles)
 
-		# Rellenar columnas opcionales ausentes
+		# Rellenar columnas opcionales ausentes con valor seguro
 		for col_opc in COLUMNAS_OPCIONALES_CLEANED:
 			if col_opc not in df_cleaned.columns:
 				df_cleaned[col_opc] = valor_relleno_categorico
 
+		# Calcular métricas derivadas (Edad) usando la fecha de nacimiento (si existe) y el año detectado
 		if 'Fecha de nacimiento' in df_cleaned.columns:
 			df_cleaned['Fecha de nacimiento'] = convertir_a_fecha(
 				df_cleaned['Fecha de nacimiento'],
@@ -1057,33 +1210,37 @@ def construir_dataframe_cleaned(
 			año_calculado,
 		)
 
+	# Excluir de limpieza categórica aquellas columnas que son puramente fechas o numéricas
 	columnas_categoricas = [
 		columna for columna in df_cleaned.columns
 		if columna not in ['Fecha de nacimiento', 'Edad', 'Marca temporal', 'Año de análisis']
 	]
 
+	# Limpieza superficial (strip espacios)
 	for columna in columnas_categoricas:
-		# Solamente aplica limpieza de texto si la columna pertenecerá al output
 		if columna in COLUMNAS_FINAL_CLEANED:
 			df_cleaned[columna] = df_cleaned[columna].apply(
 				lambda valor: limpiar_texto_categorico(valor, valor_relleno_categorico)
 			)
 
+	# Transformación estricta de numéricos
 	if 'Semestre académico' in df_cleaned.columns:
 		df_cleaned['Semestre académico'] = pd.to_numeric(
 			df_cleaned['Semestre académico'],
 			errors='coerce',
 		)
 
+	# Asignación final del Año de análisis
 	if 'Año de análisis' not in df_cleaned.columns:
 		df_cleaned['Año de análisis'] = año_calculado
 
-	# --- Normalización semántica de valores categóricos ---
+	# Normalización semántica profunda de valores (Agrupación de categorías como 'Gay' o 'LGBTIQ+')
 	df_cleaned = normalizar_valores_categoricos(
 		df_cleaned,
 		title_callback=title_callback,
 	)
 
+	# Restringir a las columnas oficiales de exportación
 	df_cleaned = df_cleaned[COLUMNAS_FINAL_CLEANED].copy()
 
 	print('Transformación finalizada.')
@@ -1092,6 +1249,10 @@ def construir_dataframe_cleaned(
 
 
 def crear_resumen_calidad(df_entrada: pd.DataFrame, df_cleaned: pd.DataFrame, tipo_base: str) -> pd.DataFrame:
+	"""
+	Construye una pequeña tabla (DataFrame) con indicadores de calidad:
+	comparación de filas entrantes/salientes y datos válidos críticos (Edad).
+	"""
 	etiqueta_base = 'base raw filtrada' if tipo_base == 'raw' else 'base cleaned cargada'
 	resumen = pd.DataFrame(
 		{
